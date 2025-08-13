@@ -1,5 +1,5 @@
-// App.js - Working PDF Editor Based on Proven Approach
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+// App.js - Fixed Rerendering Issues
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 
@@ -35,6 +35,12 @@ import "./global.css";
 import { GluestackUIProvider } from "./components/ui/gluestack-ui-provider";
 import { StatusBar } from 'expo-status-bar';
 
+// Add retro fonts and icons
+const retroFontLink = document.createElement('link');
+retroFontLink.href = 'https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&family=Orbitron:wght@400;700;900&display=swap';
+retroFontLink.rel = 'stylesheet';
+document.head.appendChild(retroFontLink);
+
 // Import Gluestack UI components
 import { Box } from './components/ui/box';
 import { VStack } from './components/ui/vstack';
@@ -54,20 +60,40 @@ import { Pressable } from './components/ui/pressable';
 import { Divider } from './components/ui/divider';
 import { Toast, ToastDescription, useToast } from './components/ui/toast';
 
-// Universal file reading
-const readFileAsBase64 = (file) => {
+// Universal file reading - FIXED for web
+const readFileAsBase64 = (fileAsset) => {
   return new Promise((resolve, reject) => {
     if (Platform.OS === 'web') {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
+      // On web, we need to fetch the file from the URI to get the actual blob
+      if (fileAsset.uri) {
+        fetch(fileAsset.uri)
+          .then(response => response.blob())
+          .then(blob => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = reader.result.split(',')[1];
+              resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          })
+          .catch(reject);
+      } else if (fileAsset.file) {
+        // Sometimes the file object is directly available
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(fileAsset.file);
+      } else {
+        reject(new Error('No valid file or URI found'));
+      }
     } else {
-      if (file.uri && file.uri.startsWith('data:')) {
-        const base64 = file.uri.split(',')[1];
+      // Native platforms
+      if (fileAsset.uri && fileAsset.uri.startsWith('data:')) {
+        const base64 = fileAsset.uri.split(',')[1];
         resolve(base64);
       } else {
         reject(new Error('File format not supported on this platform'));
@@ -76,7 +102,7 @@ const readFileAsBase64 = (file) => {
   });
 };
 
-// Custom hook for PDF operations (based on working file)
+// Custom hook for PDF operations - OPTIMIZED
 function usePDFEditor(pdfBase64) {
   const canvasRef = useRef(null);
   const [pdfDocument, setPdfDocument] = useState(null);
@@ -92,206 +118,13 @@ function usePDFEditor(pdfBase64) {
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
-  // Load PDF document
-  const loadPDF = useCallback(async () => {
-    if (!pdfBase64 || pdfLoaded || isRendering) return;
-    
-    try {
-      setIsRendering(true);
-      setPdfError(null);
-      
-      console.log('📖 Loading PDF...');
-      
-      // Dynamic import for web compatibility
-      let pdfjsLib;
-      if (Platform.OS === 'web') {
-        // Check if we're in browser environment
-        if (typeof window === 'undefined' || typeof document === 'undefined') {
-          throw new Error('Not in browser environment');
-        }
-        
-        // Use CDN version for web
-        if (!window.pdfjsLib) {
-          // Load PDF.js script dynamically
-          await new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-            script.onload = () => {
-              // Set worker after script loads
-              if (window.pdfjsLib) {
-                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                resolve();
-              } else {
-                reject(new Error('PDF.js failed to load'));
-              }
-            };
-            script.onerror = () => reject(new Error('Failed to load PDF.js'));
-            document.head.appendChild(script);
-          });
-        }
-        pdfjsLib = window.pdfjsLib;
-      } else {
-        // For mobile, we'll need a different approach or fallback
-        throw new Error('PDF.js not available on mobile');
-      }
-      
-      const pdfSource = `data:application/pdf;base64,${pdfBase64}`;
-      const loadingTask = pdfjsLib.getDocument(pdfSource);
-      const document = await loadingTask.promise;
-      
-      setPdfDocument(document);
-      setTotalPages(document.numPages);
-      setPdfLoaded(true);
-      
-      console.log(`✅ PDF loaded successfully: ${document.numPages} pages`);
-      
-    } catch (error) {
-      console.error('❌ PDF loading failed:', error);
-      setPdfError(error.message || 'Failed to load PDF');
-    } finally {
-      setIsRendering(false);
-    }
-  }, [pdfBase64, pdfLoaded, isRendering]);
-
-  // Render PDF page to canvas
-  const renderPage = useCallback(async () => {
-    if (!pdfDocument || !canvasRef.current || isRendering) return;
-    
-    try {
-      setIsRendering(true);
-      
-      const page = await pdfDocument.getPage(currentPage);
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      
-      const viewport = page.getViewport({ scale });
-      
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
-      
-      context.clearRect(0, 0, canvas.width, canvas.height);
-      
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport
-      };
-      
-      await page.render(renderContext).promise;
-      
-    } catch (error) {
-      console.error('❌ Page rendering failed:', error);
-      setPdfError('Failed to render PDF page');
-    } finally {
-      setIsRendering(false);
-    }
-  }, [pdfDocument, currentPage, scale, isRendering]);
-
-  // Field creation functions
-  const addTextObject = useCallback((x = 100, y = 100) => {
-    const id = `text_${Date.now()}`;
-    const newText = {
-      id,
-      type: 'text',
-      x: x / scale,
-      y: y / scale,
-      width: 200 / scale,
-      height: 60 / scale,
-      content: '',
-      fontSize: 12,
-      color: '#007bff',
-      page: currentPage
-    };
-    
-    setObjects(prev => [...prev, newText]);
-    setSelectedId(id);
-  }, [scale, currentPage]);
-
-  const addSignatureObject = useCallback((x = 100, y = 100) => {
-    const id = `signature_${Date.now()}`;
-    const newSignature = {
-      id,
-      type: 'signature',
-      x: x / scale,
-      y: y / scale,
-      width: 200 / scale,
-      height: 80 / scale,
-      content: null,
-      page: currentPage
-    };
-    
-    setObjects(prev => [...prev, newSignature]);
-    setSelectedId(id);
-  }, [scale, currentPage]);
-
-  const addDateObject = useCallback((x = 100, y = 100) => {
-    const id = `date_${Date.now()}`;
-    const today = new Date().toLocaleDateString();
-    
-    const newDate = {
-      id,
-      type: 'date',
-      x: x / scale,
-      y: y / scale,
-      width: 100 / scale,
-      height: 24 / scale,
-      content: today,
-      fontSize: 12,
-      color: '#007bff',
-      page: currentPage
-    };
-    
-    setObjects(prev => [...prev, newDate]);
-    setSelectedId(id);
-  }, [scale, currentPage]);
-
-  const addCheckboxObject = useCallback((x = 100, y = 100) => {
-    const id = `checkbox_${Date.now()}`;
-    const newCheckbox = {
-      id,
-      type: 'checkbox',
-      x: x / scale,
-      y: y / scale,
-      width: 30 / scale,
-      height: 30 / scale,
-      content: false,
-      fontSize: 18,
-      color: '#007bff',
-      page: currentPage
-    };
-    
-    setObjects(prev => [...prev, newCheckbox]);
-    setSelectedId(id);
-  }, [scale, currentPage]);
-
-  // Object management functions
-  const updateObject = useCallback((id, updates) => {
-    setObjects(prev => prev.map(obj => 
-      obj.id === id ? { ...obj, ...updates } : obj
-    ));
-  }, []);
-
-  const deleteObject = useCallback((id) => {
-    setObjects(prev => prev.filter(obj => obj.id !== id));
-    if (selectedId === id) setSelectedId(null);
-    if (editingId === id) setEditingId(null);
-  }, [selectedId, editingId]);
-
-  const clearAllObjects = useCallback(() => {
-    setObjects([]);
-    setSelectedId(null);
-    setEditingId(null);
-  }, []);
-
-  // Effects with optimized dependencies
+  // PDF Loading Effect - FIXED: Removed isRendering from dependencies
   useEffect(() => {
-    // Only run on web and when document is ready
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
       if (pdfBase64 && !pdfDocument && !pdfLoaded && !pdfError) {
-        // Add small delay to ensure DOM is ready
         const timeoutId = setTimeout(async () => {
-          if (!pdfBase64 || pdfLoaded || isRendering) return;
+          // Double check before proceeding
+          if (!pdfBase64 || pdfLoaded) return;
           
           try {
             setIsRendering(true);
@@ -301,12 +134,10 @@ function usePDFEditor(pdfBase64) {
             
             // Use CDN version for web
             if (!window.pdfjsLib) {
-              // Load PDF.js script dynamically
               await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
                 script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
                 script.onload = () => {
-                  // Set worker after script loads
                   if (window.pdfjsLib) {
                     window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
                     resolve();
@@ -339,49 +170,215 @@ function usePDFEditor(pdfBase64) {
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [pdfBase64, pdfDocument, pdfLoaded, pdfError, isRendering]);
+  }, [pdfBase64, pdfDocument, pdfLoaded, pdfError]); // ✅ Removed isRendering
 
+  // PDF Rendering Effect - FIXED: Optimized dependencies
   useEffect(() => {
+    if (!pdfDocument || !pdfLoaded || !canvasRef.current) return;
+    
     let timeoutId;
-    if (pdfDocument && pdfLoaded && !isRendering && canvasRef.current) {
-      timeoutId = setTimeout(async () => {
-        if (!pdfDocument || !canvasRef.current || isRendering) return;
+    let isCancelled = false;
+    
+    const renderPage = async () => {
+      if (isCancelled) return;
+      
+      try {
+        setIsRendering(true);
         
-        try {
-          setIsRendering(true);
-          
-          const page = await pdfDocument.getPage(currentPage);
-          const canvas = canvasRef.current;
-          const context = canvas.getContext('2d');
-          
-          const viewport = page.getViewport({ scale });
-          
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          canvas.style.width = `${viewport.width}px`;
-          canvas.style.height = `${viewport.height}px`;
-          
-          context.clearRect(0, 0, canvas.width, canvas.height);
-          
-          const renderContext = {
-            canvasContext: context,
-            viewport: viewport
-          };
-          
-          await page.render(renderContext).promise;
-          
-        } catch (error) {
+        const page = await pdfDocument.getPage(currentPage);
+        const canvas = canvasRef.current;
+        if (!canvas || isCancelled) return;
+        
+        const context = canvas.getContext('2d');
+        
+        // Higher quality rendering with device pixel ratio
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const viewport = page.getViewport({ scale: scale * devicePixelRatio });
+        
+        // Set actual canvas size for high DPI
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        // Scale canvas back down using CSS for crisp display
+        canvas.style.width = `${viewport.width / devicePixelRatio}px`;
+        canvas.style.height = `${viewport.height / devicePixelRatio}px`;
+        
+        // Scale the drawing context to match device pixel ratio
+        context.scale(devicePixelRatio, devicePixelRatio);
+        
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const renderContext = {
+          canvasContext: context,
+          viewport: page.getViewport({ scale }) // Use original scale for rendering context
+        };
+        
+        await page.render(renderContext).promise;
+        
+      } catch (error) {
+        if (!isCancelled) {
           console.error('❌ Page rendering failed:', error);
           setPdfError('Failed to render PDF page');
-        } finally {
+        }
+      } finally {
+        if (!isCancelled) {
           setIsRendering(false);
         }
-      }, 100);
-    }
+      }
+    };
+
+    timeoutId = setTimeout(renderPage, 100);
+    
     return () => {
+      isCancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [pdfDocument, currentPage, scale, pdfLoaded, isRendering]);
+  }, [pdfDocument, currentPage, scale, pdfLoaded]); // ✅ Removed isRendering
+
+  // Smart field placement - center of visible viewport relative to PDF
+  const getViewportCenter = useCallback(() => {
+    if (!canvasRef.current) return { x: 100, y: 100 };
+    
+    const canvas = canvasRef.current;
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    // Find the ScrollView container
+    let scrollContainer = canvas.parentElement;
+    while (scrollContainer && !scrollContainer.getAttribute('data-scroll-container')) {
+      scrollContainer = scrollContainer.parentElement;
+    }
+    
+    if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      
+      // Get scroll position
+      const scrollTop = scrollContainer.scrollTop;
+      const scrollLeft = scrollContainer.scrollLeft;
+      
+      // Calculate the center of the visible area within the container
+      const visibleCenterX = containerRect.width / 2;
+      const visibleCenterY = containerRect.height / 2;
+      
+      // Convert to PDF canvas coordinates
+      // Account for the canvas position relative to its container
+      const canvasOffsetX = canvasRect.left - containerRect.left;
+      const canvasOffsetY = canvasRect.top - containerRect.top;
+      
+      // Calculate position on the canvas considering scroll
+      const canvasX = visibleCenterX - canvasOffsetX + scrollLeft;
+      const canvasY = visibleCenterY - canvasOffsetY + scrollTop;
+      
+      // Ensure it's within canvas bounds
+      const finalX = Math.max(50, Math.min(canvasRect.width - 100, canvasX));
+      const finalY = Math.max(50, Math.min(canvasRect.height - 50, canvasY));
+      
+      console.log('Viewport center calculation:', {
+        containerRect: containerRect,
+        canvasRect: canvasRect,
+        scrollTop: scrollTop,
+        scrollLeft: scrollLeft,
+        visibleCenter: { x: visibleCenterX, y: visibleCenterY },
+        canvasOffset: { x: canvasOffsetX, y: canvasOffsetY },
+        finalPosition: { x: finalX, y: finalY }
+      });
+      
+      return { x: finalX, y: finalY };
+    }
+    
+    // Fallback: use center of canvas
+    return {
+      x: canvasRect.width / 2,
+      y: canvasRect.height / 2
+    };
+  }, []);
+
+  // Field creation functions - UPDATED with smart placement
+  const addTextObject = useCallback((x, y) => {
+    const center = x && y ? { x, y } : getViewportCenter();
+    const id = `text_${Date.now()}`;
+    const newText = {
+      id,
+      type: 'text',
+      x: center.x / scale,
+      y: center.y / scale,
+      width: 200 / scale,
+      height: 60 / scale,
+      content: '',
+      fontSize: 11,
+      color: '#000000',
+      page: currentPage
+    };
+    
+    setObjects(prev => [...prev, newText]);
+    setSelectedId(id);
+  }, [scale, currentPage, getViewportCenter]);
+
+  const addSignatureObject = useCallback(() => {
+    // This will be handled in the parent component
+    // Just return a signal that signature modal should open
+    return 'open_signature_modal';
+  }, []);
+
+  const addDateObject = useCallback((x, y) => {
+    const center = x && y ? { x, y } : getViewportCenter();
+    const id = `date_${Date.now()}`;
+    const today = new Date().toLocaleDateString();
+    
+    const newDate = {
+      id,
+      type: 'date',
+      x: center.x / scale,
+      y: center.y / scale,
+      width: 100 / scale,
+      height: 24 / scale,
+      content: today,
+      fontSize: 11,
+      color: '#000000',
+      page: currentPage
+    };
+    
+    setObjects(prev => [...prev, newDate]);
+    setSelectedId(id);
+  }, [scale, currentPage, getViewportCenter]);
+
+  const addCheckboxObject = useCallback((x, y) => {
+    const center = x && y ? { x, y } : getViewportCenter();
+    const id = `checkbox_${Date.now()}`;
+    const newCheckbox = {
+      id,
+      type: 'checkbox',
+      x: center.x / scale,
+      y: center.y / scale,
+      width: 30 / scale,
+      height: 30 / scale,
+      content: true, // Checked by default
+      fontSize: 16,
+      color: '#000000',
+      page: currentPage
+    };
+    
+    setObjects(prev => [...prev, newCheckbox]);
+    setSelectedId(id);
+  }, [scale, currentPage, getViewportCenter]);
+
+  // Object management functions - FIXED: Removed problematic dependencies
+  const updateObject = useCallback((id, updates) => {
+    setObjects(prev => prev.map(obj => 
+      obj.id === id ? { ...obj, ...updates } : obj
+    ));
+  }, []); // ✅ No dependencies needed since we use functional updates
+
+  const deleteObject = useCallback((id) => {
+    setObjects(prev => prev.filter(obj => obj.id !== id));
+    setSelectedId(prev => prev === id ? null : prev);
+    setEditingId(prev => prev === id ? null : prev);
+  }, []); // ✅ Removed selectedId, editingId dependencies
+
+  const clearAllObjects = useCallback(() => {
+    setObjects([]);
+    setSelectedId(null);
+    setEditingId(null);
+  }, []);
 
   return {
     canvasRef,
@@ -404,94 +401,211 @@ function usePDFEditor(pdfBase64) {
     updateObject,
     deleteObject,
     clearAllObjects,
-    isRendering
+    isRendering,
+    getViewportCenter,
+    setObjects // Export this for signature creation
   };
 }
 
-// Editable Field Component (simplified from working version)
-function EditableField({ object, scale, selected, editing, onUpdate, onSelect, onStartEdit, onFinishEdit }) {
+// Signature Drawing Component
+const SignaturePad = React.memo(({ onSave, onCancel }) => {
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [lastPos, setLastPos] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Set canvas size
+    canvas.width = 400;
+    canvas.height = 200;
+    
+    // Clear canvas with transparent background
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  const getMousePos = useCallback((e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  }, []);
+
+  const startDrawing = useCallback((e) => {
+    e.preventDefault();
+    setIsDrawing(true);
+    const pos = getMousePos(e);
+    setLastPos(pos);
+  }, [getMousePos]);
+
+  const draw = useCallback((e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const currentPos = getMousePos(e);
+    
+    ctx.beginPath();
+    ctx.moveTo(lastPos.x, lastPos.y);
+    ctx.lineTo(currentPos.x, currentPos.y);
+    ctx.stroke();
+    
+    setLastPos(currentPos);
+  }, [isDrawing, lastPos, getMousePos]);
+
+  const stopDrawing = useCallback(() => {
+    setIsDrawing(false);
+  }, []);
+
+  const clearSignature = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }, []);
+
+  const saveSignature = useCallback(() => {
+    const canvas = canvasRef.current;
+    const dataURL = canvas.toDataURL('image/png');
+    onSave(dataURL);
+  }, [onSave]);
+
+  // Add global mouse event listeners
+  useEffect(() => {
+    if (isDrawing) {
+      document.addEventListener('mousemove', draw);
+      document.addEventListener('mouseup', stopDrawing);
+      
+      return () => {
+        document.removeEventListener('mousemove', draw);
+        document.removeEventListener('mouseup', stopDrawing);
+      };
+    }
+  }, [isDrawing, draw, stopDrawing]);
+
+  return (
+    <VStack space="md" className="items-center">
+      <Text style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 16 }}>
+        DRAW YOUR SIGNATURE
+      </Text>
+      
+      <Box className="border-2 rounded-lg" style={{ 
+        padding: 8,
+        borderColor: '#808080',
+        backgroundColor: '#ffffff',
+        boxShadow: 'inset 2px 2px 4px #c0c0c0'
+      }}>
+        <canvas
+          ref={canvasRef}
+          onMouseDown={startDrawing}
+          style={{
+            cursor: 'crosshair',
+            display: 'block',
+            width: '400px',
+            height: '200px',
+            backgroundColor: 'transparent'
+          }}
+        />
+      </Box>
+      
+      <Text style={{ color: '#008000', fontFamily: 'monospace', fontSize: 12 }}>
+        CLICK AND DRAG TO DRAW YOUR SIGNATURE
+      </Text>
+      
+      <HStack space="md" className="items-center">
+        <Button
+          size="sm"
+          className="rounded px-4"
+          style={{
+            backgroundColor: '#c0c0c0',
+            border: '2px outset #c0c0c0'
+          }}
+          onPress={clearSignature}
+        >
+          <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>
+            CLEAR
+          </ButtonText>
+        </Button>
+        
+        <Button
+          size="sm"
+          className="rounded px-4"
+          style={{
+            backgroundColor: '#ff8080',
+            border: '2px outset #ff8080'
+          }}
+          onPress={onCancel}
+        >
+          <ButtonText style={{ color: '#800000', fontFamily: 'monospace', fontWeight: 'bold' }}>
+            CANCEL
+          </ButtonText>
+        </Button>
+        
+        <Button
+          size="sm"
+          className="rounded px-4"
+          style={{
+            backgroundColor: '#80ff80',
+            border: '2px outset #80ff80'
+          }}
+          onPress={saveSignature}
+        >
+          <ButtonText style={{ color: '#008000', fontFamily: 'monospace', fontWeight: 'bold' }}>
+            SAVE SIGNATURE
+          </ButtonText>
+        </Button>
+      </HStack>
+    </VStack>
+  );
+});
+
+// OPTIMIZED Editable Field Component
+const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, onSelect, onStartEdit, onFinishEdit }) => {
   const [value, setValue] = useState(object.content || '');
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [lastClickTime, setLastClickTime] = useState(0);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [resizeStart, setResizeStart] = useState({ width: 0, height: 0, mouseX: 0, mouseY: 0 });
 
   useEffect(() => {
     setValue(object.content || '');
   }, [object.content]);
 
-  const fieldStyle = {
+  // MEMOIZED styles to prevent recreation
+  const fieldStyle = useMemo(() => ({
     position: 'absolute',
     left: `${object.x * scale}px`,
     top: `${object.y * scale}px`,
     width: `${object.width * scale}px`,
     height: `${object.height * scale}px`,
     fontSize: object.fontSize ? `${object.fontSize * scale}px` : undefined,
-    color: object.color || '#007bff',
-    border: selected ? '2px solid #007bff' : '1px solid #ccc',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    color: object.color || '#000000',
+    border: selected ? '1px solid rgba(0, 123, 255, 0.4)' : 'none',
+    backgroundColor: 'transparent',
     borderRadius: '4px',
-    padding: '4px',
-    cursor: isDragging ? 'grabbing' : 'grab',
+    padding: '2px',
+    cursor: isDragging ? 'grabbing' : isResizing ? 'se-resize' : (selected ? 'grab' : 'pointer'),
     zIndex: selected ? 1000 : 100,
     boxSizing: 'border-box',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start'
-  };
+    justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start',
+    userSelect: editing ? 'auto' : 'none',
+  }), [object.x, object.y, object.width, object.height, object.fontSize, object.color, object.type, scale, selected, isDragging, editing]);
 
-  const handleInteraction = useCallback((e) => {
-    e.stopPropagation();
-    
-    const currentTime = Date.now();
-    const timeDiff = currentTime - lastClickTime;
-    
-    // Double-click to edit
-    if (timeDiff < 400 && selected && !isDragging) {
-      onStartEdit(object.id);
-      return;
-    }
-    
-    // Single click to select
-    onSelect(object.id);
-    setLastClickTime(currentTime);
-    
-    // Simple drag logic
-    let hasMoved = false;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startObjX = object.x;
-    const startObjY = object.y;
-    
-    const handleMouseMove = (moveEvent) => {
-      const deltaX = (moveEvent.clientX - startX) / scale;
-      const deltaY = (moveEvent.clientY - startY) / scale;
-      
-      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
-        if (!hasMoved) {
-          setIsDragging(true);
-          hasMoved = true;
-        }
-        
-        const newX = Math.max(0, startObjX + deltaX);
-        const newY = Math.max(0, startObjY + deltaY);
-        
-        onUpdate(object.id, { x: newX, y: newY });
-      }
-    };
-    
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    
-  }, [selected, lastClickTime, onSelect, onStartEdit, object, scale, onUpdate, isDragging]);
-
-  const handleContentChange = (e) => {
+  const handleContentChange = useCallback((e) => {
     if (object.type === 'checkbox') {
-      const newValue = !Boolean(value);
+      const newValue = !object.content;
       setValue(newValue);
       onUpdate(object.id, { content: newValue });
     } else {
@@ -499,36 +613,140 @@ function EditableField({ object, scale, selected, editing, onUpdate, onSelect, o
       setValue(newValue);
       onUpdate(object.id, { content: newValue });
     }
-  };
+  }, [object.id, object.type, object.content, onUpdate]);
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const now = Date.now();
+    const isDoubleClick = now - lastClickTime < 300;
+    
+    setLastClickTime(now);
+    
+    // Select the field first
+    onSelect(object.id);
+    
+    if (isDoubleClick && !editing) {
+      // Double click to edit
+      if (object.type === 'signature') {
+        onStartEdit(object.id); // This will trigger signature modal
+      } else {
+        onStartEdit(object.id);
+      }
+      return;
+    }
+    
+    if (object.type === 'checkbox' && !editing) {
+      // Double click toggles checkbox, single click starts drag
+      if (isDoubleClick) {
+        handleContentChange();
+        return;
+      }
+    }
+    
+    // Start drag operation
+    if (!editing) {
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX - object.x * scale,
+        y: e.clientY - object.y * scale
+      });
+    }
+  }, [lastClickTime, editing, object.id, object.type, object.x, object.y, scale, onSelect, onStartEdit, handleContentChange]);
+
+  const handleResizeMouseDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsResizing(true);
+    setResizeStart({
+      width: object.width,
+      height: object.height,
+      mouseX: e.clientX,
+      mouseY: e.clientY
+    });
+  }, [object.width, object.height]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (isDragging && !editing) {
+      e.preventDefault();
+      const newX = (e.clientX - dragStart.x) / scale;
+      const newY = (e.clientY - dragStart.y) / scale;
+      
+      onUpdate(object.id, { x: newX, y: newY });
+    } else if (isResizing) {
+      e.preventDefault();
+      const deltaX = e.clientX - resizeStart.mouseX;
+      const deltaY = e.clientY - resizeStart.mouseY;
+      
+      const newWidth = Math.max(20 / scale, resizeStart.width + deltaX / scale);
+      const newHeight = Math.max(15 / scale, resizeStart.height + deltaY / scale);
+      
+      onUpdate(object.id, { width: newWidth, height: newHeight });
+    }
+  }, [isDragging, isResizing, editing, dragStart, resizeStart, scale, object.id, onUpdate]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    setIsResizing(false);
+  }, []);
+
+  // Add global mouse event listeners for dragging and resizing
+  useEffect(() => {
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
   const renderFieldContent = () => {
     if (object.type === 'checkbox') {
       return (
-        <div 
-          onClick={(e) => {
-            e.stopPropagation();
-            const newValue = !Boolean(value);
-            setValue(newValue);
-            onUpdate(object.id, { content: newValue });
-          }}
-          style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: `${object.fontSize * scale}px`,
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            userSelect: 'none'
-          }}
-        >
-          {Boolean(value) ? '✓' : ''}
+        <div style={{ fontSize: '14px', userSelect: 'none', pointerEvents: editing ? 'none' : 'auto', fontWeight: 'bold' }}>
+          {object.content ? '✓' : ''}
         </div>
       );
     }
     
-    if (editing) {
+    if (object.type === 'signature') {
+      if (object.content && object.content.startsWith('data:image')) {
+        return (
+          <img
+            src={object.content}
+            alt="Signature"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              pointerEvents: 'none'
+            }}
+          />
+        );
+      } else {
+        return (
+          <div style={{ 
+            width: '100%', 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            color: '#888',
+            fontSize: '12px',
+            fontStyle: 'italic'
+          }}>
+            {editing ? 'Draw signature...' : 'Click to sign'}
+          </div>
+        );
+      }
+    }
+    
+    if (editing && object.type !== 'signature') {
       return object.type === 'text' ? (
         <textarea
           value={value}
@@ -544,7 +762,9 @@ function EditableField({ object, scale, selected, editing, onUpdate, onSelect, o
             resize: 'none',
             outline: 'none',
             fontSize: 'inherit',
-            color: 'inherit'
+            color: 'inherit',
+            borderRadius: '4px',
+            padding: '2px'
           }}
         />
       ) : (
@@ -562,14 +782,24 @@ function EditableField({ object, scale, selected, editing, onUpdate, onSelect, o
             background: 'transparent',
             outline: 'none',
             fontSize: 'inherit',
-            color: 'inherit'
+            color: 'inherit',
+            borderRadius: '4px',
+            padding: '2px'
           }}
         />
       );
     }
     
     return (
-      <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+      <div style={{ 
+        width: '100%', 
+        height: '100%', 
+        overflow: 'hidden', 
+        pointerEvents: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start'
+      }}>
         {value || `[${object.type}]`}
       </div>
     );
@@ -578,12 +808,32 @@ function EditableField({ object, scale, selected, editing, onUpdate, onSelect, o
   return (
     <div
       style={fieldStyle}
-      onMouseDown={handleInteraction}
+      onMouseDown={handleMouseDown}
     >
       {renderFieldContent()}
+      
+      {/* Resize Handle - Only show when selected and not editing */}
+      {selected && !editing && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '-5px',
+            right: '-5px',
+            width: '12px',
+            height: '12px',
+            backgroundColor: '#007bff',
+            border: '2px solid white',
+            borderRadius: '3px',
+            cursor: 'se-resize',
+            zIndex: 1001,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+          }}
+          onMouseDown={handleResizeMouseDown}
+        />
+      )}
     </div>
   );
-}
+});
 
 function AppContent() {
   // ===== STATE =====
@@ -591,6 +841,8 @@ function AppContent() {
   const [currentView, setCurrentView] = useState('picker'); // 'picker' | 'editor'
   const [pdfBase64, setPdfBase64] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signingFieldId, setSigningFieldId] = useState(null);
 
   const toast = useToast();
 
@@ -616,18 +868,24 @@ function AppContent() {
     updateObject,
     deleteObject,
     clearAllObjects,
-    isRendering
+    isRendering,
+    getViewportCenter,
+    setObjects
   } = usePDFEditor(pdfBase64);
 
-  const tools = [
-    { id: 'text', label: 'Text', icon: '📝', action: () => addTextObject(100, 100) },
-    { id: 'signature', label: 'Signature', icon: '✍️', action: () => addSignatureObject(100, 100) },
-    { id: 'date', label: 'Date', icon: '📅', action: () => addDateObject(100, 100) },
-    { id: 'checkbox', label: 'Checkbox', icon: '☑️', action: () => addCheckboxObject(100, 100) }
-  ];
+  // MEMOIZED tools array to prevent recreation
+  const tools = useMemo(() => [
+    { id: 'text', label: 'Text', icon: '📝', action: () => addTextObject() },
+    { id: 'signature', label: 'Signature', icon: '✍️', action: () => {
+      setShowSignatureModal(true);
+      setSigningFieldId('new');
+    }},
+    { id: 'date', label: 'Date', icon: '📅', action: () => addDateObject() },
+    { id: 'checkbox', label: 'Checkbox', icon: '☑️', action: () => addCheckboxObject() }
+  ], [addTextObject, addDateObject, addCheckboxObject]);
 
   // ===== FILE PICKER =====
-  const handlePickDocument = async () => {
+  const handlePickDocument = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -641,28 +899,29 @@ function AppContent() {
         setSelectedFile(file);
         
         try {
-          const base64 = await readFileAsBase64(Platform.OS === 'web' ? file.file : file);
+          const base64 = await readFileAsBase64(file);
           setPdfBase64(base64);
           setCurrentView('editor');
           
           toast.show({
             placement: "top",
             render: ({ id }) => (
-              <Toast nativeID={`toast-${id}`} className="bg-green-600 rounded-lg">
-                <ToastDescription className="text-white font-medium">
-                  PDF loaded successfully!
+              <Toast nativeId={id} className="bg-green-500">
+                <ToastDescription className="text-white">
+                  ✅ PDF loaded successfully!
                 </ToastDescription>
               </Toast>
             ),
           });
-        } catch (readError) {
-          console.error('File reading error:', readError);
+          
+        } catch (error) {
+          console.error('File reading error:', error);
           toast.show({
             placement: "top",
             render: ({ id }) => (
-              <Toast nativeID={`toast-${id}`} className="bg-red-600 rounded-lg">
-                <ToastDescription className="text-white font-medium">
-                  Failed to read PDF file
+              <Toast nativeId={id} className="bg-red-500">
+                <ToastDescription className="text-white">
+                  ❌ Failed to read PDF file
                 </ToastDescription>
               </Toast>
             ),
@@ -670,13 +929,13 @@ function AppContent() {
         }
       }
     } catch (error) {
-      console.error('❌ Error picking document:', error);
+      console.error('Document picker error:', error);
       toast.show({
         placement: "top",
         render: ({ id }) => (
-          <Toast nativeID={`toast-${id}`} className="bg-red-600 rounded-lg">
-            <ToastDescription className="text-white font-medium">
-              Failed to pick document: {error.message}
+          <Toast nativeId={id} className="bg-red-500">
+            <ToastDescription className="text-white">
+              ❌ Error selecting file
             </ToastDescription>
           </Toast>
         ),
@@ -684,123 +943,176 @@ function AppContent() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
-  const handleCanvasClick = useCallback(() => {
+  // MEMOIZED handlers
+  const handleCanvasClick = useCallback((e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
     setSelectedId(null);
     setEditingId(null);
   }, [setSelectedId, setEditingId]);
 
-  const handleSave = () => {
-    Alert.alert(
-      'Save PDF', 
-      `Save PDF with ${objects.length} fields?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Save', onPress: () => {
-          toast.show({
-            placement: "top",
-            render: ({ id }) => (
-              <Toast nativeID={`toast-${id}`} className="bg-green-600 rounded-lg">
-                <ToastDescription className="text-white font-medium">
-                  PDF saved with {objects.length} fields!
-                </ToastDescription>
-              </Toast>
-            ),
-          });
-        }}
-      ]
-    );
-  };
-
-  // Get fields for current page
-  const getCurrentPageFields = () => {
+  const getCurrentPageFields = useCallback(() => {
     return objects.filter(obj => obj.page === currentPage);
-  };
+  }, [objects, currentPage]);
+
+  // Signature handling
+  const handleStartEdit = useCallback((fieldId) => {
+    const field = objects.find(obj => obj.id === fieldId);
+    if (field && field.type === 'signature') {
+      setSigningFieldId(fieldId);
+      setShowSignatureModal(true);
+    } else {
+      setEditingId(fieldId);
+    }
+  }, [objects, setEditingId]);
+
+  const handleSaveSignature = useCallback((signatureDataURL) => {
+    if (signingFieldId === 'new') {
+      // Create new signature field with the signature
+      const center = getViewportCenter();
+      const id = `signature_${Date.now()}`;
+      const newSignature = {
+        id,
+        type: 'signature',
+        x: center.x / scale,
+        y: center.y / scale,
+        width: 200 / scale,
+        height: 80 / scale,
+        content: signatureDataURL,
+        page: currentPage
+      };
+      
+      setObjects(prev => [...prev, newSignature]);
+      setSelectedId(id);
+    } else if (signingFieldId) {
+      // Update existing signature field
+      updateObject(signingFieldId, { content: signatureDataURL });
+    }
+    
+    setShowSignatureModal(false);
+    setSigningFieldId(null);
+  }, [signingFieldId, updateObject, getViewportCenter, scale, currentPage, setObjects, setSelectedId]);
+
+  const handleCancelSignature = useCallback(() => {
+    setShowSignatureModal(false);
+    setSigningFieldId(null);
+  }, []);
 
   // ===== RENDER PICKER VIEW =====
   if (currentView === 'picker') {
     return (
-      <Box className="flex-1 bg-gray-50">
+      <Box className="flex-1" style={{ background: 'linear-gradient(135deg, #c0c0c0 0%, #808080 100%)' }}>
         <StatusBar style="auto" />
         
-        <Box className="bg-blue-600 px-4 py-4 shadow-sm">
-          <Heading className="text-xl font-bold text-white text-center">
-            📄 PDF Form Editor Pro
-          </Heading>
-          <Text className="text-blue-100 text-center text-sm mt-1">
-            Canvas-based PDF.js Editor
-          </Text>
+        {/* Retro Header */}
+        <Box className="px-6 py-8 border-b-2" style={{ 
+          background: 'linear-gradient(to bottom, #c0c0c0, #a0a0a0)',
+          borderBottomColor: '#000080',
+          boxShadow: 'inset -2px -2px 4px #808080, inset 2px 2px 4px #ffffff'
+        }}>
+          <VStack space="sm" className="items-center">
+            <HStack space="md" className="items-center">
+              <Box className="px-3 py-2 rounded" style={{ 
+                backgroundColor: '#000080',
+                boxShadow: 'inset -1px -1px 2px #000040, inset 1px 1px 2px #4040ff'
+              }}>
+                <Text className="text-white font-bold text-2xl">💾</Text>
+              </Box>
+              <VStack>
+                <Heading className="text-3xl font-bold" style={{ 
+                  color: '#ffffff', 
+                  fontFamily: 'Orbitron, monospace',
+                  textShadow: '2px 2px 0px #000080, -1px -1px 0px #ffffff'
+                }}>
+                  PDF PROCESSOR
+                </Heading>
+                <Text className="text-base font-bold" style={{ 
+                  color: '#000080', 
+                  fontFamily: 'Share Tech Mono, monospace',
+                  backgroundColor: '#ffffff',
+                  padding: '2px 8px',
+                  borderRadius: '2px'
+                }}>
+                  ENTERPRISE EDITION v3.0
+                </Text>
+              </VStack>
+            </HStack>
+          </VStack>
         </Box>
         
-        <ScrollView className="flex-1 p-4">
+        <ScrollView className="flex-1 p-6">
           <Center>
-            <Card className="bg-white rounded-xl shadow-lg p-8 m-4 w-full max-w-md">
+            <Card className="rounded-lg shadow-lg p-8 m-4 w-full max-w-md" style={{
+              backgroundColor: '#c0c0c0',
+              border: '2px outset #c0c0c0',
+              boxShadow: '4px 4px 8px rgba(0,0,0,0.3)'
+            }}>
               <VStack space="lg" className="items-center">
+                {/* Retro Icon */}
+                <Box className="p-6 rounded" style={{ 
+                  backgroundColor: '#000080',
+                  border: '3px outset #000080',
+                  boxShadow: '4px 4px 8px rgba(0,0,0,0.4)'
+                }}>
+                  <Text className="text-6xl">🗂️</Text>
+                </Box>
+                
                 <VStack space="sm" className="items-center">
-                  <Heading className="text-2xl font-bold text-gray-800">
-                    Select PDF to Edit
+                  <Heading className="text-2xl font-bold" style={{ 
+                    color: '#ffffff', 
+                    fontFamily: 'Orbitron, monospace',
+                    textShadow: '2px 2px 0px #000080'
+                  }}>
+                    LOAD DOCUMENT
                   </Heading>
-                  <Text className="text-base text-gray-600 text-center">
-                    Choose a PDF file to add interactive form fields
+                  <Text className="text-base text-center font-bold" style={{ 
+                    color: '#000080', 
+                    fontFamily: 'Share Tech Mono, monospace',
+                    backgroundColor: '#ffffff',
+                    padding: '4px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid #000080'
+                  }}>
+                    Select PDF for form field integration
                   </Text>
-                  
-                  <Box className="bg-green-50 p-3 rounded-lg mt-3">
-                    <Text className="text-sm text-green-700 text-center">
-                      🚀 <Text className="font-semibold">PDF.js Canvas:</Text> Professional PDF rendering with native performance
-                    </Text>
-                  </Box>
                 </VStack>
                 
                 <Button
                   size="lg"
-                  className="bg-blue-600 rounded-lg w-full"
+                  className="w-full rounded"
+                  style={{
+                    backgroundColor: '#008080',
+                    border: '3px outset #008080',
+                    boxShadow: '4px 4px 8px rgba(0,0,0,0.4)',
+                    padding: '16px'
+                  }}
                   onPress={handlePickDocument}
                   disabled={isLoading}
                 >
                   {isLoading ? (
                     <HStack space="sm" className="items-center">
-                      <Spinner size="small" />
-                      <ButtonText className="text-white">Loading...</ButtonText>
+                      <Spinner size="small" color="white" />
+                      <ButtonText className="text-white font-bold text-lg" style={{ 
+                        fontFamily: 'Orbitron, monospace'
+                      }}>
+                        PROCESSING...
+                      </ButtonText>
                     </HStack>
                   ) : (
-                    <ButtonText className="text-white">📄 Pick PDF File</ButtonText>
+                    <HStack space="sm" className="items-center">
+                      <Text className="text-white text-2xl">📁</Text>
+                      <ButtonText className="text-white font-bold text-lg" style={{ 
+                        fontFamily: 'Orbitron, monospace'
+                      }}>
+                        SELECT FILE
+                      </ButtonText>
+                    </HStack>
                   )}
                 </Button>
-
-                {selectedFile && (
-                  <Box className="w-full">
-                    <Divider className="my-4" />
-                    <Text className="text-sm text-gray-500 mb-3 font-semibold">
-                      SELECTED FILE
-                    </Text>
-                    
-                    <Box className="bg-gray-50 p-4 rounded-lg">
-                      <VStack space="md">
-                        <HStack space="md" className="items-center">
-                          <Text className="text-2xl">📎</Text>
-                          <VStack className="flex-1" space="xs">
-                            <Text className="text-base font-semibold text-gray-800">
-                              {selectedFile.name}
-                            </Text>
-                            <Text className="text-sm text-gray-600">
-                              {selectedFile.size ? (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'Size unknown'}
-                            </Text>
-                          </VStack>
-                        </HStack>
-                        
-                        <HStack space="sm" className="items-center">
-                          <Text className="text-sm text-gray-600">Status:</Text>
-                          <Badge className="bg-green-100 rounded-md">
-                            <BadgeText className="text-green-800">
-                              ✅ Ready for editing
-                            </BadgeText>
-                          </Badge>
-                        </HStack>
-                      </VStack>
-                    </Box>
-                  </Box>
-                )}
               </VStack>
             </Card>
           </Center>
@@ -809,247 +1121,309 @@ function AppContent() {
     );
   }
 
-  // ===== RENDER PDF EDITOR =====
-  if (pdfError) {
-    return (
-      <Box className="flex-1 bg-gray-50 justify-center items-center">
-        <VStack space="lg" className="items-center">
-          <Text className="text-xl text-red-600">Failed to Load PDF</Text>
-          <Text className="text-gray-600">{pdfError}</Text>
-          <Button onPress={() => setCurrentView('picker')}>
-            <ButtonText>← Back to File Picker</ButtonText>
-          </Button>
-        </VStack>
-      </Box>
-    );
-  }
-
-  if (!pdfLoaded) {
-    return (
-      <Box className="flex-1 bg-gray-50 justify-center items-center">
-        <VStack space="lg" className="items-center">
-          <Spinner size="large" />
-          <Text className="text-lg text-gray-600">Loading PDF...</Text>
-          <Text className="text-sm text-gray-500">Initializing PDF.js renderer...</Text>
-        </VStack>
-      </Box>
-    );
-  }
-
+  // ===== RENDER EDITOR VIEW =====
   return (
-    <Box className="flex-1 bg-gray-50">
+    <Box className="flex-1" style={{ backgroundColor: '#c0c0c0' }}>
       <StatusBar style="auto" />
       
-      {/* Header */}
-      <Box className="bg-blue-600 px-4 py-3 shadow-sm">
+      {/* Retro Header */}
+      <Box className="px-4 py-3 border-b-2" style={{ 
+        background: 'linear-gradient(to bottom, #c0c0c0, #a0a0a0)',
+        borderBottomColor: '#808080',
+        boxShadow: 'inset -1px -1px 2px #808080, inset 1px 1px 2px #ffffff'
+      }}>
         <HStack className="items-center justify-between">
-          <Pressable onPress={() => {
-            setCurrentView('picker');
-            setSelectedFile(null);
-            setPdfBase64(null);
-          }}>
-            <Text className="text-white text-base font-medium">← Back</Text>
-          </Pressable>
+          <HStack space="md" className="items-center">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded"
+              style={{
+                backgroundColor: '#c0c0c0',
+                borderColor: '#808080',
+                border: '2px outset #c0c0c0'
+              }}
+              onPress={() => setCurrentView('picker')}
+            >
+              <ButtonText style={{ 
+                color: '#ffffff', 
+                fontFamily: 'Orbitron, monospace', 
+                fontWeight: 'bold',
+                textShadow: '1px 1px 0px #000080'
+              }}>
+                ← BACK
+              </ButtonText>
+            </Button>
+            <VStack>
+              <Heading size="md" style={{ 
+                color: '#ffffff', 
+                fontFamily: 'Orbitron, monospace', 
+                fontWeight: 'bold',
+                textShadow: '1px 1px 0px #000080'
+              }}>
+                {selectedFile?.name || 'DOCUMENT.PDF'}
+              </Heading>
+              <Text size="sm" style={{ 
+                color: '#000080', 
+                fontFamily: 'Share Tech Mono, monospace',
+                backgroundColor: '#ffffff',
+                padding: '2px 6px',
+                borderRadius: '2px',
+                fontWeight: 'bold'
+              }}>
+                PAGE {currentPage}/{totalPages}
+              </Text>
+            </VStack>
+          </HStack>
           
-          <VStack className="flex-1 items-center">
-            <Heading className="text-lg font-bold text-white text-center" style={{ maxWidth: 200 }}>
-              {selectedFile?.name || 'PDF Editor'}
-            </Heading>
-            <Text className="text-blue-200 text-xs">
-              Page {currentPage} of {totalPages}
-            </Text>
-          </VStack>
-          
-          <Pressable onPress={handleSave}>
-            <Text className="text-white text-base font-semibold">Save</Text>
-          </Pressable>
+          <HStack space="sm" className="items-center">
+            {isRendering && (
+              <Box className="flex-row items-center space-x-2">
+                <Spinner size="small" />
+                <Text style={{ color: '#800000', fontFamily: 'monospace', fontSize: 10 }}>RENDERING...</Text>
+              </Box>
+            )}
+          </HStack>
         </HStack>
       </Box>
 
-      <VStack className="flex-1">
-        {/* Page Navigation */}
-        {totalPages > 1 && (
-          <Box className="bg-white px-4 py-3 shadow-sm border-b border-gray-200">
-            <HStack className="items-center justify-between">
+      {/* Retro Toolbar */}
+      <Box className="px-4 py-2 border-b" style={{ 
+        backgroundColor: '#c0c0c0',
+        borderBottomColor: '#808080',
+        boxShadow: 'inset 0 -1px 1px #ffffff'
+      }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <HStack space="sm" className="items-center">
+            {tools.map((tool) => (
               <Button
-                variant="outline"
+                key={tool.id}
                 size="sm"
-                className="border-blue-600 rounded-lg"
-                onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage <= 1}
+                className="rounded px-3"
+                style={{
+                  backgroundColor: '#c0c0c0',
+                  border: '2px outset #c0c0c0',
+                  boxShadow: '1px 1px 2px rgba(0,0,0,0.3)'
+                }}
+                onPress={tool.action}
               >
-                <ButtonText className={currentPage <= 1 ? 'text-gray-400' : 'text-blue-600'}>
-                  ← Previous
+                <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 11 }}>
+                  {tool.icon} {tool.label.toUpperCase()}
                 </ButtonText>
               </Button>
-              
-              <HStack space="sm" className="items-center">
-                <Text className="text-sm text-gray-600">Page {currentPage} of {totalPages}</Text>
-                <Text className="text-xs text-gray-500">
-                  Scale: {Math.round(scale * 100)}%
-                </Text>
-              </HStack>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-blue-600 rounded-lg"
-                onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage >= totalPages}
-              >
-                <ButtonText className={currentPage >= totalPages ? 'text-gray-400' : 'text-blue-600'}>
-                  Next →
-                </ButtonText>
-              </Button>
-            </HStack>
-          </Box>
-        )}
+            ))}
+            
+            <Box className="mx-2 h-6 w-px" style={{ backgroundColor: '#808080' }} />
+            
+            <Button
+              size="sm"
+              className="rounded px-3"
+              style={{
+                backgroundColor: '#ff8080',
+                border: '2px outset #ff8080',
+                boxShadow: '1px 1px 2px rgba(0,0,0,0.3)'
+              }}
+              onPress={clearAllObjects}
+            >
+              <ButtonText style={{ color: '#800000', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 11 }}>
+                🗑️ DELETE ALL
+              </ButtonText>
+            </Button>
+          </HStack>
+        </ScrollView>
+      </Box>
 
-        {/* Tool Selector */}
-        <Box className="bg-white p-4 shadow-sm">
-          <Text className="text-sm text-gray-600 mb-3 font-semibold">
-            ADD FIELDS:
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <HStack space="md">
-              {tools.map(tool => (
-                <Button
-                  key={tool.id}
-                  variant="outline"
-                  size="sm"
-                  className="border-blue-600 rounded-lg min-w-24"
-                  onPress={tool.action}
-                >
-                  <ButtonText className="text-sm text-blue-600">
-                    {tool.icon} {tool.label}
-                  </ButtonText>
-                </Button>
-              ))}
-              
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-red-500 rounded-lg"
-                onPress={clearAllObjects}
-                disabled={objects.length === 0}
-              >
-                <ButtonText className="text-sm text-red-600">
-                  🗑️ Clear All
-                </ButtonText>
-              </Button>
-            </HStack>
-          </ScrollView>
-        </Box>
-
-        {/* PDF Canvas Container */}
-        <Box className="flex-1 m-4">
-          <Card className="flex-1 bg-white rounded-xl shadow-lg overflow-hidden">
-            <Box style={{ position: 'relative', flex: 1 }}>
-              {isRendering && (
-                <Box style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                  zIndex: 2000,
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}>
-                  <VStack space="sm" className="items-center">
-                    <Spinner size="large" />
-                    <Text className="text-gray-600">Rendering...</Text>
-                  </VStack>
+      {/* Main Content */}
+      <Box className="flex-1" style={{ backgroundColor: '#008080' }}>
+        <ScrollView className="flex-1" contentContainerStyle={{ minHeight: '100%', justifyContent: 'center' }} data-scroll-container>
+          <Center className="p-4">
+            <Box className="rounded-lg overflow-hidden relative" style={{
+              backgroundColor: '#ffffff',
+              border: '3px inset #c0c0c0',
+              boxShadow: '4px 4px 8px rgba(0,0,0,0.4)'
+            }}>
+              {pdfError ? (
+                <Box className="p-8 text-center">
+                  <Text style={{ color: '#ff0000', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                    ❌ ERROR: {pdfError}
+                  </Text>
+                  <Button 
+                    className="mt-4 rounded"
+                    style={{
+                      backgroundColor: '#008080',
+                      border: '2px outset #008080'
+                    }}
+                    onPress={() => setCurrentView('picker')}
+                  >
+                    <ButtonText style={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                      TRY ANOTHER FILE
+                    </ButtonText>
+                  </Button>
                 </Box>
-              )}
-              
-              {Platform.OS === 'web' ? (
-                <div style={{ position: 'relative', overflow: 'auto', height: '100%' }}>
+              ) : (
+                <Box className="relative">
                   <canvas
                     ref={canvasRef}
                     onClick={handleCanvasClick}
                     style={{
                       display: 'block',
-                      margin: '0 auto',
-                      cursor: 'crosshair'
+                      maxWidth: '100%',
+                      height: 'auto'
                     }}
                   />
                   
-                  {/* Render form fields */}
-                  {getCurrentPageFields().map(obj => (
+                  {/* Overlay fields for current page */}
+                  {getCurrentPageFields().map((object) => (
                     <EditableField
-                      key={obj.id}
-                      object={obj}
+                      key={object.id}
+                      object={object}
                       scale={scale}
-                      selected={selectedId === obj.id}
-                      editing={editingId === obj.id}
+                      selected={selectedId === object.id}
+                      editing={editingId === object.id}
                       onUpdate={updateObject}
                       onSelect={setSelectedId}
-                      onStartEdit={setEditingId}
+                      onStartEdit={handleStartEdit}
                       onFinishEdit={() => setEditingId(null)}
                     />
                   ))}
-                </div>
-              ) : (
-                <Center className="flex-1">
-                  <VStack space="lg" className="items-center">
-                    <Text className="text-lg text-gray-600">PDF.js Canvas Editor</Text>
-                    <Text className="text-sm text-gray-500 text-center">
-                      Canvas rendering is optimized for web browsers
-                    </Text>
-                  </VStack>
-                </Center>
+                </Box>
               )}
             </Box>
-          </Card>
-        </Box>
+          </Center>
+        </ScrollView>
+      </Box>
 
-        {/* Field List */}
-        {getCurrentPageFields().length > 0 && (
-          <Card className="bg-white mx-4 mb-4 p-4 rounded-xl shadow-md">
-            <VStack space="md">
-              <HStack className="items-center justify-between">
-                <HStack space="md" className="items-center">
-                  <Text className="text-2xl">📋</Text>
-                  <VStack>
-                    <Text className="text-base font-bold text-gray-800">
-                      {getCurrentPageFields().length} field{getCurrentPageFields().length !== 1 ? 's' : ''} on page {currentPage}
-                    </Text>
-                    <Text className="text-xs text-gray-500">
-                      Total: {objects.length} field{objects.length !== 1 ? 's' : ''} across all pages
-                    </Text>
-                  </VStack>
-                </HStack>
-              </HStack>
-              
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <HStack space="md">
-                  {getCurrentPageFields().map(field => (
-                    <Pressable
-                      key={field.id}
-                      onPress={() => setSelectedId(field.id)}
-                    >
-                      <Box className={`p-3 rounded-lg border min-w-20 ${
-                        selectedId === field.id 
-                          ? 'bg-blue-50 border-blue-500' 
-                          : 'bg-gray-50 border-gray-300'
-                      }`}>
-                        <Text className="text-sm font-medium text-center">
-                          {field.type}
-                        </Text>
-                        <Text className="text-xs text-gray-600 text-center">
-                          {field.content || `[${field.type}]`}
-                        </Text>
-                      </Box>
-                    </Pressable>
-                  ))}
-                </HStack>
-              </ScrollView>
-            </VStack>
-          </Card>
-        )}
-      </VStack>
+      {/* Retro Bottom Navigation */}
+      <Box className="px-4 py-3 border-t-2" style={{ 
+        backgroundColor: '#c0c0c0',
+        borderTopColor: '#ffffff',
+        boxShadow: 'inset 0 1px 1px #ffffff, 0 -1px 1px #808080'
+      }}>
+        <HStack className="items-center justify-between">
+          <HStack space="sm" className="items-center">
+            <Button
+              size="sm"
+              className="rounded px-3"
+              style={{
+                backgroundColor: currentPage <= 1 ? '#a0a0a0' : '#c0c0c0',
+                border: '2px outset #c0c0c0',
+                opacity: currentPage <= 1 ? 0.5 : 1
+              }}
+              onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
+            >
+              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                ← PREV
+              </ButtonText>
+            </Button>
+            
+            <Box className="px-3 py-1 rounded" style={{ 
+              backgroundColor: '#000080',
+              border: '1px inset #000080'
+            }}>
+              <Text style={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                {currentPage}/{totalPages}
+              </Text>
+            </Box>
+            
+            <Button
+              size="sm"
+              className="rounded px-3"
+              style={{
+                backgroundColor: currentPage >= totalPages ? '#a0a0a0' : '#c0c0c0',
+                border: '2px outset #c0c0c0',
+                opacity: currentPage >= totalPages ? 0.5 : 1
+              }}
+              onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                NEXT →
+              </ButtonText>
+            </Button>
+          </HStack>
+          
+          <HStack space="sm" className="items-center">
+            <Text style={{ color: '#008000', fontFamily: 'monospace', fontSize: 11 }}>ZOOM:</Text>
+            <Button
+              size="sm"
+              className="rounded"
+              style={{
+                backgroundColor: '#c0c0c0',
+                border: '2px outset #c0c0c0',
+                width: 32,
+                height: 32
+              }}
+              onPress={() => setScale(Math.max(0.25, scale - 0.25))}
+              disabled={scale <= 0.25}
+            >
+              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>−</ButtonText>
+            </Button>
+            <Box className="px-2 py-1 rounded" style={{ 
+              backgroundColor: '#000080',
+              border: '1px inset #000080',
+              minWidth: 50
+            }}>
+              <ButtonText 
+                style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: 10, textAlign: 'center' }}
+                onPress={() => setScale(1.0)}
+              >
+                {Math.round(scale * 100)}%
+              </ButtonText>
+            </Box>
+            <Button
+              size="sm"
+              className="rounded"
+              style={{
+                backgroundColor: '#c0c0c0',
+                border: '2px outset #c0c0c0',
+                width: 32,
+                height: 32
+              }}
+              onPress={() => setScale(Math.min(4, scale + 0.25))}
+              disabled={scale >= 4}
+            >
+              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>+</ButtonText>
+            </Button>
+          </HStack>
+        </HStack>
+      </Box>
+
+      {/* Retro Signature Modal */}
+      <Modal isOpen={showSignatureModal} onClose={handleCancelSignature}>
+        <ModalBackdrop style={{ backgroundColor: 'rgba(128,128,128,0.8)' }} />
+        <ModalContent className="rounded" style={{
+          backgroundColor: '#c0c0c0',
+          border: '3px outset #c0c0c0',
+          boxShadow: '4px 4px 8px rgba(0,0,0,0.5)'
+        }}>
+          <ModalHeader style={{ borderBottom: '2px inset #c0c0c0' }}>
+            <HStack className="items-center justify-between w-full">
+              <Text style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 16 }}>
+                SIGNATURE PAD v1.0
+              </Text>
+              <ModalCloseButton 
+                className="rounded"
+                style={{
+                  backgroundColor: '#ff8080',
+                  border: '2px outset #ff8080',
+                  width: 24,
+                  height: 24
+                }}
+                onPress={handleCancelSignature}
+              >
+                <Text style={{ color: '#800000', fontFamily: 'monospace', fontWeight: 'bold' }}>×</Text>
+              </ModalCloseButton>
+            </HStack>
+          </ModalHeader>
+          <ModalBody style={{ backgroundColor: '#c0c0c0' }}>
+            <SignaturePad 
+              onSave={handleSaveSignature}
+              onCancel={handleCancelSignature}
+            />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
