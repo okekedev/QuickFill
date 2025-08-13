@@ -10,6 +10,13 @@ module.exports = {
       pattern:
         /(bg|border|text|stroke|fill)-(primary|secondary|tertiary|error|success|warning|info|typography|outline|background|indicator)-(0|50|100|200|300|400|500|600|700|800|900|950|white|gray|black|error|warning|muted|success|info|light|dark|primary)/,
     },
+    // Add XP/Facebook specific classes to safelist
+    {
+      pattern: /(btn|card|window|input|nav|toolbar|list|tab|badge|progress|avatar|menu|checkbox|toggle)-(xp|fb)/,
+    },
+    {
+      pattern: /(shadow|gradient|border|transition)-(xp|fb)(-[a-z]+)?/,
+    },
   ],
   theme: {
     extend: {
@@ -157,11 +164,9 @@ module.exports = {
           950: 'rgb(var(--color-background-950)/<alpha-value>)',
           error: 'rgb(var(--color-background-error)/<alpha-value>)',
           warning: 'rgb(var(--color-background-warning)/<alpha-value>)',
-          muted: 'rgb(var(--color-background-muted)/<alpha-value>)',
           success: 'rgb(var(--color-background-success)/<alpha-value>)',
+          muted: 'rgb(var(--color-background-muted)/<alpha-value>)',
           info: 'rgb(var(--color-background-info)/<alpha-value>)',
-          light: '#FBFBFB',
-          dark: '#181719',
         },
         indicator: {
           primary: 'rgb(var(--color-indicator-primary)/<alpha-value>)',
@@ -170,29 +175,188 @@ module.exports = {
         },
       },
       fontFamily: {
-        heading: undefined,
-        body: undefined,
-        mono: undefined,
-        roboto: ['Roboto', 'sans-serif'],
-      },
-      fontWeight: {
-        extrablack: '950',
+        // Windows XP system fonts
+        'xp': ['Segoe UI', 'Tahoma', 'Geneva', 'Verdana', 'sans-serif'],
+        'xp-mono': ['Consolas', 'Courier New', 'monospace'],
+        // Facebook fonts  
+        'fb': ['Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
       },
       fontSize: {
-        '2xs': '10px',
+        // XP-inspired font sizes
+        'xp-xs': ['11px', { lineHeight: '16px' }],
+        'xp-sm': ['12px', { lineHeight: '18px' }],
+        'xp-base': ['13px', { lineHeight: '20px' }],
+        'xp-lg': ['14px', { lineHeight: '22px' }],
+        'xp-xl': ['16px', { lineHeight: '24px' }],
+      },
+      spacing: {
+        // XP-inspired spacing (based on 4px grid)
+        'xp-1': '2px',
+        'xp-2': '4px', 
+        'xp-3': '6px',
+        'xp-4': '8px',
+        'xp-5': '10px',
+        'xp-6': '12px',
+        'xp-8': '16px',
+        'xp-10': '20px',
+        'xp-12': '24px',
+      },
+      borderRadius: {
+        // XP typically used minimal rounding
+        'xp': '2px',
+        'xp-sm': '1px',
+        'xp-md': '3px',
+        'xp-lg': '4px',
+        // Facebook uses more modern rounding
+        'fb': '8px',
+        'fb-sm': '6px',
+        'fb-md': '10px',
+        'fb-lg': '12px',
+        'fb-xl': '16px',
       },
       boxShadow: {
-        'hard-1': '-2px 2px 8px 0px rgba(38, 38, 38, 0.20)',
-        'hard-2': '0px 3px 10px 0px rgba(38, 38, 38, 0.20)',
-        'hard-3': '2px 2px 8px 0px rgba(38, 38, 38, 0.20)',
-        'hard-4': '0px -3px 10px 0px rgba(38, 38, 38, 0.20)',
-        'hard-5': '0px 2px 10px 0px rgba(38, 38, 38, 0.10)',
-        'soft-1': '0px 0px 10px rgba(38, 38, 38, 0.1)',
-        'soft-2': '0px 0px 20px rgba(38, 38, 38, 0.2)',
-        'soft-3': '0px 0px 30px rgba(38, 38, 38, 0.1)',
-        'soft-4': '0px 0px 40px rgba(38, 38, 38, 0.1)',
+        // XP-style shadows
+        'xp-window': '2px 2px 8px rgba(0, 0, 0, 0.3)',
+        'xp-button': '1px 1px 3px rgba(0, 0, 0, 0.2)',
+        'xp-inset': 'inset 1px 1px 0 rgba(255, 255, 255, 0.8), inset -1px -1px 0 rgba(0, 0, 0, 0.2)',
+        'xp-sunken': 'inset 1px 1px 2px rgba(0, 0, 0, 0.3)',
+        
+        // Facebook-style shadows
+        'fb-card': '0 2px 4px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.1)',
+        'fb-hover': '0 4px 8px rgba(0, 0, 0, 0.12), 0 12px 20px rgba(0, 0, 0, 0.15)',
+        'fb-button': '0 1px 2px rgba(0, 0, 0, 0.1)',
+        'fb-nav': '0 2px 4px rgba(0, 0, 0, 0.08)',
+      },
+      animation: {
+        // XP-inspired animations
+        'xp-fadeIn': 'xpFadeIn 0.3s ease-out',
+        'xp-slideDown': 'xpSlideDown 0.2s ease-out',
+        'xp-hover': 'xpHover 0.15s ease-out',
+        
+        // Facebook-inspired animations
+        'fb-slideUp': 'fbSlideUp 0.3s ease-out',
+        'fb-scaleIn': 'fbScaleIn 0.2s ease-out',
+        'fb-bounce': 'fbBounce 0.4s ease-out',
+        'fb-pulse': 'fbPulse 2s infinite',
+        
+        // Shared animations
+        'smooth-pulse': 'smoothPulse 1.5s ease-in-out infinite',
+        'gentle-bounce': 'gentleBounce 0.6s ease-out',
+      },
+      keyframes: {
+        // XP-style animations
+        xpFadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(-4px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        xpSlideDown: {
+          '0%': { opacity: '0', transform: 'translateY(-8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        xpHover: {
+          '0%': { transform: 'translateY(0)' },
+          '100%': { transform: 'translateY(-1px)' },
+        },
+        
+        // Facebook-style animations
+        fbSlideUp: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        fbScaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        fbBounce: {
+          '0%, 20%, 53%, 80%, 100%': { transform: 'translateY(0)' },
+          '40%, 43%': { transform: 'translateY(-4px)' },
+          '70%': { transform: 'translateY(-2px)' },
+          '90%': { transform: 'translateY(-1px)' },
+        },
+        fbPulse: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.7' },
+        },
+        
+        // Shared animations
+        smoothPulse: {
+          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0.8', transform: 'scale(1.02)' },
+        },
+        gentleBounce: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-2px)' },
+        },
+      },
+      backdropBlur: {
+        'xp': '2px',
+        'fb': '10px',
+      },
+      transitionTimingFunction: {
+        'xp': 'cubic-bezier(0.4, 0, 0.2, 1)',
+        'fb': 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        'smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      transitionDuration: {
+        'xp': '200ms',
+        'fb': '150ms',
+      },
+      zIndex: {
+        'xp-tooltip': '1000',
+        'xp-dropdown': '1010',
+        'xp-modal': '1020',
+        'xp-taskbar': '1030',
       },
     },
   },
-  plugins: [gluestackPlugin],
+  plugins: [
+    gluestackPlugin,
+    // Custom plugin for XP/Facebook specific utilities
+    function({ addUtilities, theme }) {
+      const newUtilities = {
+        // XP Button states
+        '.btn-xp-pressed': {
+          transform: 'translateY(1px)',
+          boxShadow: 'inset 2px 2px 4px rgba(0, 0, 0, 0.3)',
+        },
+        
+        // Facebook interaction states
+        '.fb-interactive': {
+          transition: 'all 0.15s ease-out',
+          '&:hover': {
+            transform: 'translateY(-1px)',
+            boxShadow: theme('boxShadow.fb-hover'),
+          },
+          '&:active': {
+            transform: 'translateY(0)',
+          },
+        },
+        
+        // Glass morphism utilities
+        '.glass-xp': {
+          backdropFilter: 'blur(2px)',
+          background: 'rgba(248, 250, 252, 0.8)',
+          border: '1px solid rgba(203, 213, 225, 0.5)',
+        },
+        
+        '.glass-fb': {
+          backdropFilter: 'blur(10px)',
+          background: 'rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+        },
+        
+        // Text utilities
+        '.text-xp-shadow': {
+          textShadow: '0 1px 0 rgba(0, 0, 0, 0.3)',
+        },
+        
+        '.text-fb-weight': {
+          fontWeight: '600',
+          letterSpacing: '-0.01em',
+        },
+      }
+      
+      addUtilities(newUtilities)
+    }
+  ],
 };

@@ -1,4 +1,4 @@
-// App.js - Fixed Rerendering Issues
+// App.js - QuickSign with Heroicons
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Alert, Platform, StyleSheet, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -35,11 +35,38 @@ import "./global.css";
 import { GluestackUIProvider } from "./components/ui/gluestack-ui-provider";
 import { StatusBar } from 'expo-status-bar';
 
-// Add retro fonts and icons
-const retroFontLink = document.createElement('link');
-retroFontLink.href = 'https://fonts.googleapis.com/css2?family=Share+Tech+Mono:wght@400&family=Orbitron:wght@400;700;900&display=swap';
-retroFontLink.rel = 'stylesheet';
-document.head.appendChild(retroFontLink);
+// Heroicons via CDN (since we can't install packages)
+// We'll create SVG components for the icons we need
+const HeroIcon = ({ path, className = "w-6 h-6", ...props }) => (
+  <svg 
+    className={className} 
+    fill="none" 
+    stroke="currentColor" 
+    viewBox="0 0 24 24" 
+    xmlns="http://www.w3.org/2000/svg"
+    {...props}
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />
+  </svg>
+);
+
+// Heroicon paths
+const icons = {
+  upload: "M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12",
+  documentText: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  pencil: "M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z",
+  calendar: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
+  checkSquare: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+  download: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  refresh: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+  zoomIn: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7",
+  zoomOut: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7",
+  chevronLeft: "M15 19l-7-7 7-7",
+  chevronRight: "M9 5l7 7-7 7",
+  x: "M6 18L18 6M6 6l12 12",
+  check: "M5 13l4 4L19 7",
+  lightning: "M13 10V3L4 14h7v7l9-11h-7z"
+};
 
 // Import Gluestack UI components
 import { Box } from './components/ui/box';
@@ -50,21 +77,16 @@ import { Heading } from './components/ui/heading';
 import { Button, ButtonText } from './components/ui/button';
 import { Card } from './components/ui/card';
 import { ScrollView } from './components/ui/scroll-view';
-import { Modal, ModalBackdrop, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter } from './components/ui/modal';
-import { Input, InputField } from './components/ui/input';
-import { FormControl, FormControlLabel, FormControlLabelText } from './components/ui/form-control';
+import { Modal, ModalBackdrop, ModalContent, ModalHeader, ModalCloseButton, ModalBody } from './components/ui/modal';
 import { Badge, BadgeText } from './components/ui/badge';
 import { Center } from './components/ui/center';
 import { Spinner } from './components/ui/spinner';
-import { Pressable } from './components/ui/pressable';
-import { Divider } from './components/ui/divider';
 import { Toast, ToastDescription, useToast } from './components/ui/toast';
 
-// Universal file reading - FIXED for web
+// Universal file reading
 const readFileAsBase64 = (fileAsset) => {
   return new Promise((resolve, reject) => {
     if (Platform.OS === 'web') {
-      // On web, we need to fetch the file from the URI to get the actual blob
       if (fileAsset.uri) {
         fetch(fileAsset.uri)
           .then(response => response.blob())
@@ -79,7 +101,6 @@ const readFileAsBase64 = (fileAsset) => {
           })
           .catch(reject);
       } else if (fileAsset.file) {
-        // Sometimes the file object is directly available
         const reader = new FileReader();
         reader.onload = () => {
           const base64 = reader.result.split(',')[1];
@@ -91,7 +112,6 @@ const readFileAsBase64 = (fileAsset) => {
         reject(new Error('No valid file or URI found'));
       }
     } else {
-      // Native platforms
       if (fileAsset.uri && fileAsset.uri.startsWith('data:')) {
         const base64 = fileAsset.uri.split(',')[1];
         resolve(base64);
@@ -102,7 +122,7 @@ const readFileAsBase64 = (fileAsset) => {
   });
 };
 
-// Custom hook for PDF operations - OPTIMIZED
+// PDF Editor Hook (simplified)
 function usePDFEditor(pdfBase64) {
   const canvasRef = useRef(null);
   const [pdfDocument, setPdfDocument] = useState(null);
@@ -112,27 +132,21 @@ function usePDFEditor(pdfBase64) {
   const [pdfLoaded, setPdfLoaded] = useState(false);
   const [pdfError, setPdfError] = useState(null);
   const [isRendering, setIsRendering] = useState(false);
-
-  // Form field state
   const [objects, setObjects] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
-  // PDF Loading Effect - FIXED: Removed isRendering from dependencies
+  // PDF Loading Effect
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
       if (pdfBase64 && !pdfDocument && !pdfLoaded && !pdfError) {
         const timeoutId = setTimeout(async () => {
-          // Double check before proceeding
           if (!pdfBase64 || pdfLoaded) return;
           
           try {
             setIsRendering(true);
             setPdfError(null);
             
-            console.log('📖 Loading PDF...');
-            
-            // Use CDN version for web
             if (!window.pdfjsLib) {
               await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
@@ -158,10 +172,8 @@ function usePDFEditor(pdfBase64) {
             setTotalPages(pdfDoc.numPages);
             setPdfLoaded(true);
             
-            console.log(`✅ PDF loaded successfully: ${pdfDoc.numPages} pages`);
-            
           } catch (error) {
-            console.error('❌ PDF loading failed:', error);
+            console.error('PDF loading failed:', error);
             setPdfError(error.message || 'Failed to load PDF');
           } finally {
             setIsRendering(false);
@@ -170,9 +182,9 @@ function usePDFEditor(pdfBase64) {
         return () => clearTimeout(timeoutId);
       }
     }
-  }, [pdfBase64, pdfDocument, pdfLoaded, pdfError]); // ✅ Removed isRendering
+  }, [pdfBase64, pdfDocument, pdfLoaded, pdfError]);
 
-  // PDF Rendering Effect - FIXED: Optimized dependencies
+  // PDF Rendering Effect
   useEffect(() => {
     if (!pdfDocument || !pdfLoaded || !canvasRef.current) return;
     
@@ -190,34 +202,27 @@ function usePDFEditor(pdfBase64) {
         if (!canvas || isCancelled) return;
         
         const context = canvas.getContext('2d');
-        
-        // Higher quality rendering with device pixel ratio
         const devicePixelRatio = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale: scale * devicePixelRatio });
         
-        // Set actual canvas size for high DPI
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        
-        // Scale canvas back down using CSS for crisp display
         canvas.style.width = `${viewport.width / devicePixelRatio}px`;
         canvas.style.height = `${viewport.height / devicePixelRatio}px`;
         
-        // Scale the drawing context to match device pixel ratio
         context.scale(devicePixelRatio, devicePixelRatio);
-        
         context.clearRect(0, 0, canvas.width, canvas.height);
         
         const renderContext = {
           canvasContext: context,
-          viewport: page.getViewport({ scale }) // Use original scale for rendering context
+          viewport: page.getViewport({ scale })
         };
         
         await page.render(renderContext).promise;
         
       } catch (error) {
         if (!isCancelled) {
-          console.error('❌ Page rendering failed:', error);
+          console.error('Page rendering failed:', error);
           setPdfError('Failed to render PDF page');
         }
       } finally {
@@ -233,66 +238,20 @@ function usePDFEditor(pdfBase64) {
       isCancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [pdfDocument, currentPage, scale, pdfLoaded]); // ✅ Removed isRendering
+  }, [pdfDocument, currentPage, scale, pdfLoaded]);
 
-  // Smart field placement - center of visible viewport relative to PDF
   const getViewportCenter = useCallback(() => {
     if (!canvasRef.current) return { x: 100, y: 100 };
     
     const canvas = canvasRef.current;
     const canvasRect = canvas.getBoundingClientRect();
     
-    // Find the ScrollView container
-    let scrollContainer = canvas.parentElement;
-    while (scrollContainer && !scrollContainer.getAttribute('data-scroll-container')) {
-      scrollContainer = scrollContainer.parentElement;
-    }
-    
-    if (scrollContainer) {
-      const containerRect = scrollContainer.getBoundingClientRect();
-      
-      // Get scroll position
-      const scrollTop = scrollContainer.scrollTop;
-      const scrollLeft = scrollContainer.scrollLeft;
-      
-      // Calculate the center of the visible area within the container
-      const visibleCenterX = containerRect.width / 2;
-      const visibleCenterY = containerRect.height / 2;
-      
-      // Convert to PDF canvas coordinates
-      // Account for the canvas position relative to its container
-      const canvasOffsetX = canvasRect.left - containerRect.left;
-      const canvasOffsetY = canvasRect.top - containerRect.top;
-      
-      // Calculate position on the canvas considering scroll
-      const canvasX = visibleCenterX - canvasOffsetX + scrollLeft;
-      const canvasY = visibleCenterY - canvasOffsetY + scrollTop;
-      
-      // Ensure it's within canvas bounds
-      const finalX = Math.max(50, Math.min(canvasRect.width - 100, canvasX));
-      const finalY = Math.max(50, Math.min(canvasRect.height - 50, canvasY));
-      
-      console.log('Viewport center calculation:', {
-        containerRect: containerRect,
-        canvasRect: canvasRect,
-        scrollTop: scrollTop,
-        scrollLeft: scrollLeft,
-        visibleCenter: { x: visibleCenterX, y: visibleCenterY },
-        canvasOffset: { x: canvasOffsetX, y: canvasOffsetY },
-        finalPosition: { x: finalX, y: finalY }
-      });
-      
-      return { x: finalX, y: finalY };
-    }
-    
-    // Fallback: use center of canvas
     return {
       x: canvasRect.width / 2,
       y: canvasRect.height / 2
     };
   }, []);
 
-  // Field creation functions - UPDATED with smart placement
   const addTextObject = useCallback((x, y) => {
     const center = x && y ? { x, y } : getViewportCenter();
     const id = `text_${Date.now()}`;
@@ -314,8 +273,6 @@ function usePDFEditor(pdfBase64) {
   }, [scale, currentPage, getViewportCenter]);
 
   const addSignatureObject = useCallback(() => {
-    // This will be handled in the parent component
-    // Just return a signal that signature modal should open
     return 'open_signature_modal';
   }, []);
 
@@ -351,7 +308,7 @@ function usePDFEditor(pdfBase64) {
       y: center.y / scale,
       width: 30 / scale,
       height: 30 / scale,
-      content: true, // Checked by default
+      content: true,
       fontSize: 16,
       color: '#000000',
       page: currentPage
@@ -361,18 +318,17 @@ function usePDFEditor(pdfBase64) {
     setSelectedId(id);
   }, [scale, currentPage, getViewportCenter]);
 
-  // Object management functions - FIXED: Removed problematic dependencies
   const updateObject = useCallback((id, updates) => {
     setObjects(prev => prev.map(obj => 
       obj.id === id ? { ...obj, ...updates } : obj
     ));
-  }, []); // ✅ No dependencies needed since we use functional updates
+  }, []);
 
   const deleteObject = useCallback((id) => {
     setObjects(prev => prev.filter(obj => obj.id !== id));
     setSelectedId(prev => prev === id ? null : prev);
     setEditingId(prev => prev === id ? null : prev);
-  }, []); // ✅ Removed selectedId, editingId dependencies
+  }, []);
 
   const clearAllObjects = useCallback(() => {
     setObjects([]);
@@ -403,7 +359,7 @@ function usePDFEditor(pdfBase64) {
     clearAllObjects,
     isRendering,
     getViewportCenter,
-    setObjects // Export this for signature creation
+    setObjects
   };
 }
 
@@ -423,11 +379,8 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
-    // Set canvas size
     canvas.width = 400;
     canvas.height = 200;
-    
-    // Clear canvas with transparent background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }, []);
 
@@ -479,7 +432,6 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
     onSave(dataURL);
   }, [onSave]);
 
-  // Add global mouse event listeners
   useEffect(() => {
     if (isDrawing) {
       document.addEventListener('mousemove', draw);
@@ -494,94 +446,58 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
 
   return (
     <VStack space="md" className="items-center">
-      <Text style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 16 }}>
-        DRAW YOUR SIGNATURE
-      </Text>
+      <Heading size="lg" className="text-primary-600 font-semibold flex items-center">
+        <HeroIcon path={icons.pencil} className="w-6 h-6 mr-2 text-primary-500" />
+        <span className="text-windows-gradient">Create Your Signature</span>
+      </Heading>
       
-      <Box className="border-2 rounded-lg" style={{ 
-        padding: 8,
-        borderColor: '#808080',
-        backgroundColor: '#ffffff',
-        boxShadow: 'inset 2px 2px 4px #c0c0c0'
-      }}>
+      <Box className="window-xp p-4">
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
+          className="shadow-xp-inset rounded-xp bg-background-0 border-2 border-outline-300"
           style={{
             cursor: 'crosshair',
             display: 'block',
             width: '400px',
-            height: '200px',
-            backgroundColor: 'transparent'
+            height: '200px'
           }}
         />
       </Box>
       
-      <Text style={{ color: '#008000', fontFamily: 'monospace', fontSize: 12 }}>
-        CLICK AND DRAG TO DRAW YOUR SIGNATURE
+      <Text className="text-typography-600 text-sm font-medium">
+        Click and drag to draw your signature
       </Text>
       
       <HStack space="md" className="items-center">
-        <Button
-          size="sm"
-          className="rounded px-4"
-          style={{
-            backgroundColor: '#c0c0c0',
-            border: '2px outset #c0c0c0'
-          }}
-          onPress={clearSignature}
-        >
-          <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>
-            CLEAR
-          </ButtonText>
+        <Button className="btn-windows-grey" onPress={clearSignature}>
+          <HeroIcon path={icons.refresh} className="w-4 h-4 mr-2 text-white" />
+          <ButtonText className="text-white font-bold">Clear</ButtonText>
         </Button>
         
-        <Button
-          size="sm"
-          className="rounded px-4"
-          style={{
-            backgroundColor: '#ff8080',
-            border: '2px outset #ff8080'
-          }}
-          onPress={onCancel}
-        >
-          <ButtonText style={{ color: '#800000', fontFamily: 'monospace', fontWeight: 'bold' }}>
-            CANCEL
-          </ButtonText>
+        <Button className="btn-windows-red" onPress={onCancel}>
+          <HeroIcon path={icons.x} className="w-4 h-4 mr-2 text-white" />
+          <ButtonText className="text-white font-bold">Cancel</ButtonText>
         </Button>
         
-        <Button
-          size="sm"
-          className="rounded px-4"
-          style={{
-            backgroundColor: '#80ff80',
-            border: '2px outset #80ff80'
-          }}
-          onPress={saveSignature}
-        >
-          <ButtonText style={{ color: '#008000', fontFamily: 'monospace', fontWeight: 'bold' }}>
-            SAVE SIGNATURE
-          </ButtonText>
+        <Button className="btn-windows-green" onPress={saveSignature}>
+          <HeroIcon path={icons.check} className="w-4 h-4 mr-2 text-white" />
+          <ButtonText className="text-white font-bold">Save</ButtonText>
         </Button>
       </HStack>
     </VStack>
   );
 });
 
-// OPTIMIZED Editable Field Component
+// Simple Editable Field Component
 const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, onSelect, onStartEdit, onFinishEdit }) => {
   const [value, setValue] = useState(object.content || '');
   const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [lastClickTime, setLastClickTime] = useState(0);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [resizeStart, setResizeStart] = useState({ width: 0, height: 0, mouseX: 0, mouseY: 0 });
 
   useEffect(() => {
     setValue(object.content || '');
   }, [object.content]);
 
-  // MEMOIZED styles to prevent recreation
   const fieldStyle = useMemo(() => ({
     position: 'absolute',
     left: `${object.x * scale}px`,
@@ -590,255 +506,54 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
     height: `${object.height * scale}px`,
     fontSize: object.fontSize ? `${object.fontSize * scale}px` : undefined,
     color: object.color || '#000000',
-    border: selected ? '1px solid rgba(0, 123, 255, 0.4)' : 'none',
-    backgroundColor: 'transparent',
+    border: selected ? '2px solid rgb(var(--color-primary-500))' : '1px solid transparent',
+    backgroundColor: selected ? 'rgba(var(--color-primary-50), 0.1)' : 'transparent',
     borderRadius: '4px',
-    padding: '2px',
-    cursor: isDragging ? 'grabbing' : isResizing ? 'se-resize' : (selected ? 'grab' : 'pointer'),
+    padding: '4px',
+    cursor: isDragging ? 'grabbing' : (selected ? 'grab' : 'pointer'),
     zIndex: selected ? 1000 : 100,
     boxSizing: 'border-box',
     display: 'flex',
     alignItems: 'center',
     justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start',
     userSelect: editing ? 'auto' : 'none',
-  }), [object.x, object.y, object.width, object.height, object.fontSize, object.color, object.type, scale, selected, isDragging, editing]);
-
-  const handleContentChange = useCallback((e) => {
-    if (object.type === 'checkbox') {
-      const newValue = !object.content;
-      setValue(newValue);
-      onUpdate(object.id, { content: newValue });
-    } else {
-      const newValue = e.target.value;
-      setValue(newValue);
-      onUpdate(object.id, { content: newValue });
-    }
-  }, [object.id, object.type, object.content, onUpdate]);
-
-  const handleMouseDown = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const now = Date.now();
-    const isDoubleClick = now - lastClickTime < 300;
-    
-    setLastClickTime(now);
-    
-    // Select the field first
-    onSelect(object.id);
-    
-    if (isDoubleClick && !editing) {
-      // Double click to edit
-      if (object.type === 'signature') {
-        onStartEdit(object.id); // This will trigger signature modal
-      } else {
-        onStartEdit(object.id);
-      }
-      return;
-    }
-    
-    if (object.type === 'checkbox' && !editing) {
-      // Double click toggles checkbox, single click starts drag
-      if (isDoubleClick) {
-        handleContentChange();
-        return;
-      }
-    }
-    
-    // Start drag operation
-    if (!editing) {
-      setIsDragging(true);
-      setDragStart({
-        x: e.clientX - object.x * scale,
-        y: e.clientY - object.y * scale
-      });
-    }
-  }, [lastClickTime, editing, object.id, object.type, object.x, object.y, scale, onSelect, onStartEdit, handleContentChange]);
-
-  const handleResizeMouseDown = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    setIsResizing(true);
-    setResizeStart({
-      width: object.width,
-      height: object.height,
-      mouseX: e.clientX,
-      mouseY: e.clientY
-    });
-  }, [object.width, object.height]);
-
-  const handleMouseMove = useCallback((e) => {
-    if (isDragging && !editing) {
-      e.preventDefault();
-      const newX = (e.clientX - dragStart.x) / scale;
-      const newY = (e.clientY - dragStart.y) / scale;
-      
-      onUpdate(object.id, { x: newX, y: newY });
-    } else if (isResizing) {
-      e.preventDefault();
-      const deltaX = e.clientX - resizeStart.mouseX;
-      const deltaY = e.clientY - resizeStart.mouseY;
-      
-      const newWidth = Math.max(20 / scale, resizeStart.width + deltaX / scale);
-      const newHeight = Math.max(15 / scale, resizeStart.height + deltaY / scale);
-      
-      onUpdate(object.id, { width: newWidth, height: newHeight });
-    }
-  }, [isDragging, isResizing, editing, dragStart, resizeStart, scale, object.id, onUpdate]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    setIsResizing(false);
-  }, []);
-
-  // Add global mouse event listeners for dragging and resizing
-  useEffect(() => {
-    if (isDragging || isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
-
-  const renderFieldContent = () => {
-    if (object.type === 'checkbox') {
-      return (
-        <div style={{ fontSize: '14px', userSelect: 'none', pointerEvents: editing ? 'none' : 'auto', fontWeight: 'bold' }}>
-          {object.content ? '✓' : ''}
-        </div>
-      );
-    }
-    
-    if (object.type === 'signature') {
-      if (object.content && object.content.startsWith('data:image')) {
-        return (
-          <img
-            src={object.content}
-            alt="Signature"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              pointerEvents: 'none'
-            }}
-          />
-        );
-      } else {
-        return (
-          <div style={{ 
-            width: '100%', 
-            height: '100%', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            color: '#888',
-            fontSize: '12px',
-            fontStyle: 'italic'
-          }}>
-            {editing ? 'Draw signature...' : 'Click to sign'}
-          </div>
-        );
-      }
-    }
-    
-    if (editing && object.type !== 'signature') {
-      return object.type === 'text' ? (
-        <textarea
-          value={value}
-          onChange={handleContentChange}
-          onBlur={onFinishEdit}
-          autoFocus
-          placeholder="Enter text..."
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            background: 'transparent',
-            resize: 'none',
-            outline: 'none',
-            fontSize: 'inherit',
-            color: 'inherit',
-            borderRadius: '4px',
-            padding: '2px'
-          }}
-        />
-      ) : (
-        <input
-          type={object.type === 'date' ? 'date' : 'text'}
-          value={value}
-          onChange={handleContentChange}
-          onBlur={onFinishEdit}
-          autoFocus
-          placeholder={`Enter ${object.type}...`}
-          style={{
-            width: '100%',
-            height: '100%',
-            border: 'none',
-            background: 'transparent',
-            outline: 'none',
-            fontSize: 'inherit',
-            color: 'inherit',
-            borderRadius: '4px',
-            padding: '2px'
-          }}
-        />
-      );
-    }
-    
-    return (
-      <div style={{ 
-        width: '100%', 
-        height: '100%', 
-        overflow: 'hidden', 
-        pointerEvents: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start'
-      }}>
-        {value || `[${object.type}]`}
-      </div>
-    );
-  };
+    boxShadow: selected ? '0 2px 8px rgba(var(--color-primary-500), 0.3)' : 'none',
+    transition: 'all 0.2s ease',
+    fontFamily: 'Inter, system-ui, sans-serif'
+  }), [object, scale, selected, isDragging, editing]);
 
   return (
-    <div
-      style={fieldStyle}
-      onMouseDown={handleMouseDown}
-    >
-      {renderFieldContent()}
-      
-      {/* Resize Handle - Only show when selected and not editing */}
-      {selected && !editing && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '-5px',
-            right: '-5px',
-            width: '12px',
-            height: '12px',
-            backgroundColor: '#007bff',
-            border: '2px solid white',
-            borderRadius: '3px',
-            cursor: 'se-resize',
-            zIndex: 1001,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
-          }}
-          onMouseDown={handleResizeMouseDown}
-        />
+    <div style={fieldStyle} onClick={() => onSelect(object.id)}>
+      {object.type === 'checkbox' ? (
+        <div className={`checkbox-xp ${object.content ? 'checked' : ''}`} style={{ 
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '20px',
+          height: '20px'
+        }}>
+          {object.content ? '✓' : ''}
+        </div>
+      ) : (
+        <div style={{ 
+          width: '100%', 
+          height: '100%', 
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          fontWeight: '500'
+        }}>
+          {value || `[${object.type}]`}
+        </div>
       )}
     </div>
   );
 });
 
 function AppContent() {
-  // ===== STATE =====
   const [selectedFile, setSelectedFile] = useState(null);
-  const [currentView, setCurrentView] = useState('picker'); // 'picker' | 'editor'
+  const [currentView, setCurrentView] = useState('picker');
   const [pdfBase64, setPdfBase64] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -846,7 +561,6 @@ function AppContent() {
 
   const toast = useToast();
 
-  // PDF Editor hook
   const {
     canvasRef,
     pdfLoaded,
@@ -873,18 +587,16 @@ function AppContent() {
     setObjects
   } = usePDFEditor(pdfBase64);
 
-  // MEMOIZED tools array to prevent recreation
   const tools = useMemo(() => [
-    { id: 'text', label: 'Text', icon: '📝', action: () => addTextObject() },
-    { id: 'signature', label: 'Signature', icon: '✍️', action: () => {
+    { id: 'text', label: 'Text', icon: icons.documentText, action: () => addTextObject() },
+    { id: 'signature', label: 'Signature', icon: icons.pencil, action: () => {
       setShowSignatureModal(true);
       setSigningFieldId('new');
     }},
-    { id: 'date', label: 'Date', icon: '📅', action: () => addDateObject() },
-    { id: 'checkbox', label: 'Checkbox', icon: '☑️', action: () => addCheckboxObject() }
+    { id: 'date', label: 'Date', icon: icons.calendar, action: () => addDateObject() },
+    { id: 'checkbox', label: 'Checkbox', icon: icons.checkSquare, action: () => addCheckboxObject() }
   ], [addTextObject, addDateObject, addCheckboxObject]);
 
-  // ===== FILE PICKER =====
   const handlePickDocument = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -906,8 +618,8 @@ function AppContent() {
           toast.show({
             placement: "top",
             render: ({ id }) => (
-              <Toast nativeId={id} className="bg-green-500">
-                <ToastDescription className="text-white">
+              <Toast nativeId={id} className="bg-success-500 shadow-fb">
+                <ToastDescription className="text-white font-semibold">
                   ✅ PDF loaded successfully!
                 </ToastDescription>
               </Toast>
@@ -919,8 +631,8 @@ function AppContent() {
           toast.show({
             placement: "top",
             render: ({ id }) => (
-              <Toast nativeId={id} className="bg-red-500">
-                <ToastDescription className="text-white">
+              <Toast nativeId={id} className="bg-error-500 shadow-fb">
+                <ToastDescription className="text-white font-semibold">
                   ❌ Failed to read PDF file
                 </ToastDescription>
               </Toast>
@@ -930,49 +642,13 @@ function AppContent() {
       }
     } catch (error) {
       console.error('Document picker error:', error);
-      toast.show({
-        placement: "top",
-        render: ({ id }) => (
-          <Toast nativeId={id} className="bg-red-500">
-            <ToastDescription className="text-white">
-              ❌ Error selecting file
-            </ToastDescription>
-          </Toast>
-        ),
-      });
     } finally {
       setIsLoading(false);
     }
   }, [toast]);
 
-  // MEMOIZED handlers
-  const handleCanvasClick = useCallback((e) => {
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    setSelectedId(null);
-    setEditingId(null);
-  }, [setSelectedId, setEditingId]);
-
-  const getCurrentPageFields = useCallback(() => {
-    return objects.filter(obj => obj.page === currentPage);
-  }, [objects, currentPage]);
-
-  // Signature handling
-  const handleStartEdit = useCallback((fieldId) => {
-    const field = objects.find(obj => obj.id === fieldId);
-    if (field && field.type === 'signature') {
-      setSigningFieldId(fieldId);
-      setShowSignatureModal(true);
-    } else {
-      setEditingId(fieldId);
-    }
-  }, [objects, setEditingId]);
-
   const handleSaveSignature = useCallback((signatureDataURL) => {
     if (signingFieldId === 'new') {
-      // Create new signature field with the signature
       const center = getViewportCenter();
       const id = `signature_${Date.now()}`;
       const newSignature = {
@@ -989,7 +665,6 @@ function AppContent() {
       setObjects(prev => [...prev, newSignature]);
       setSelectedId(id);
     } else if (signingFieldId) {
-      // Update existing signature field
       updateObject(signingFieldId, { content: signatureDataURL });
     }
     
@@ -997,274 +672,217 @@ function AppContent() {
     setSigningFieldId(null);
   }, [signingFieldId, updateObject, getViewportCenter, scale, currentPage, setObjects, setSelectedId]);
 
-  const handleCancelSignature = useCallback(() => {
-    setShowSignatureModal(false);
-    setSigningFieldId(null);
-  }, []);
+  const getCurrentPageFields = useCallback(() => {
+    return objects.filter(obj => obj.page === currentPage);
+  }, [objects, currentPage]);
 
-  // ===== RENDER PICKER VIEW =====
+  // Home Screen - Clean and Simple with Windows Logo Theme
   if (currentView === 'picker') {
     return (
-      <Box className="flex-1" style={{ background: 'linear-gradient(135deg, #c0c0c0 0%, #808080 100%)' }}>
+      <Box className="flex-1 bg-gradient-to-br from-background-0 to-background-100 min-h-screen">
         <StatusBar style="auto" />
         
-        {/* Retro Header */}
-        <Box className="px-6 py-8 border-b-2" style={{ 
-          background: 'linear-gradient(to bottom, #c0c0c0, #a0a0a0)',
-          borderBottomColor: '#000080',
-          boxShadow: 'inset -2px -2px 4px #808080, inset 2px 2px 4px #ffffff'
-        }}>
-          <VStack space="sm" className="items-center">
-            <HStack space="md" className="items-center">
-              <Box className="px-3 py-2 rounded" style={{ 
-                backgroundColor: '#000080',
-                boxShadow: 'inset -1px -1px 2px #000040, inset 1px 1px 2px #4040ff'
-              }}>
-                <Text className="text-white font-bold text-2xl">💾</Text>
-              </Box>
-              <VStack>
-                <Heading className="text-3xl font-bold" style={{ 
-                  color: '#ffffff', 
-                  fontFamily: 'Orbitron, monospace',
-                  textShadow: '2px 2px 0px #000080, -1px -1px 0px #ffffff'
-                }}>
-                  PDF PROCESSOR
-                </Heading>
-                <Text className="text-base font-bold" style={{ 
-                  color: '#000080', 
-                  fontFamily: 'Share Tech Mono, monospace',
-                  backgroundColor: '#ffffff',
-                  padding: '2px 8px',
-                  borderRadius: '2px'
-                }}>
-                  ENTERPRISE EDITION v3.0
-                </Text>
-              </VStack>
-            </HStack>
-          </VStack>
-        </Box>
-        
-        <ScrollView className="flex-1 p-6">
-          <Center>
-            <Card className="rounded-lg shadow-lg p-8 m-4 w-full max-w-md" style={{
-              backgroundColor: '#c0c0c0',
-              border: '2px outset #c0c0c0',
-              boxShadow: '4px 4px 8px rgba(0,0,0,0.3)'
-            }}>
-              <VStack space="lg" className="items-center">
-                {/* Retro Icon */}
-                <Box className="p-6 rounded" style={{ 
-                  backgroundColor: '#000080',
-                  border: '3px outset #000080',
-                  boxShadow: '4px 4px 8px rgba(0,0,0,0.4)'
-                }}>
-                  <Text className="text-6xl">🗂️</Text>
+        <Center className="flex-1 px-6">
+          <VStack space="2xl" className="items-center max-w-md w-full">
+            
+            {/* Brand Header with Windows Colors */}
+            <VStack space="lg" className="items-center">
+              <Heading className="text-6xl font-bold text-light-blue-gradient animate-stagger-1">
+                QuickSign
+              </Heading>
+              <HStack space="md" className="items-center animate-float animate-stagger-2">
+                <Box className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg animate-glow-1">
+                  <HeroIcon path={icons.pencil} className="w-6 h-6 text-white" />
                 </Box>
-                
-                <VStack space="sm" className="items-center">
-                  <Heading className="text-2xl font-bold" style={{ 
-                    color: '#ffffff', 
-                    fontFamily: 'Orbitron, monospace',
-                    textShadow: '2px 2px 0px #000080'
-                  }}>
-                    LOAD DOCUMENT
-                  </Heading>
-                  <Text className="text-base text-center font-bold" style={{ 
-                    color: '#000080', 
-                    fontFamily: 'Share Tech Mono, monospace',
-                    backgroundColor: '#ffffff',
-                    padding: '4px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid #000080'
-                  }}>
-                    Select PDF for form field integration
+                <Box className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg animate-glow-2">
+                  <HeroIcon path={icons.documentText} className="w-6 h-6 text-white" />
+                </Box>
+                <Box className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg animate-glow-3">
+                  <HeroIcon path={icons.calendar} className="w-6 h-6 text-white" />
+                </Box>
+                <Box className="p-3 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl shadow-lg animate-glow-4">
+                  <HeroIcon path={icons.checkCircle} className="w-6 h-6 text-white" />
+                </Box>
+              </HStack>
+            </VStack>
+
+            {/* Upload Section with Windows Logo Styling */}
+            <VStack space="xl" className="items-center w-full">
+              
+              {/* Large Upload Zone with Windows Logo Border */}
+              <Box className="upload-zone-windows p-12 w-full animate-stagger-3">
+                <VStack space="md" className="items-center">
+                  <HeroIcon path={icons.upload} className="w-24 h-24 text-primary-500 animate-pulse-icon" />
+                  <Text className="text-typography-600 font-semibold text-lg">
+                    Drop your PDF here or click to browse
                   </Text>
                 </VStack>
-                
-                <Button
-                  size="lg"
-                  className="w-full rounded"
-                  style={{
-                    backgroundColor: '#008080',
-                    border: '3px outset #008080',
-                    boxShadow: '4px 4px 8px rgba(0,0,0,0.4)',
-                    padding: '16px'
-                  }}
-                  onPress={handlePickDocument}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <HStack space="sm" className="items-center">
-                      <Spinner size="small" color="white" />
-                      <ButtonText className="text-white font-bold text-lg" style={{ 
-                        fontFamily: 'Orbitron, monospace'
-                      }}>
-                        PROCESSING...
-                      </ButtonText>
-                    </HStack>
-                  ) : (
-                    <HStack space="sm" className="items-center">
-                      <Text className="text-white text-2xl">📁</Text>
-                      <ButtonText className="text-white font-bold text-lg" style={{ 
-                        fontFamily: 'Orbitron, monospace'
-                      }}>
-                        SELECT FILE
-                      </ButtonText>
-                    </HStack>
-                  )}
-                </Button>
-              </VStack>
-            </Card>
-          </Center>
-        </ScrollView>
+              </Box>
+
+              {/* Windows Logo Animated Upload Button */}
+              <Button
+                size="xl"
+                className="btn-windows-animated w-full animate-stagger-4"
+                onPress={handlePickDocument}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <HStack space="sm" className="items-center">
+                    <div className="spinner-fb" />
+                    <ButtonText className="text-white font-bold text-xl">
+                      Processing...
+                    </ButtonText>
+                  </HStack>
+                ) : (
+                  <HStack space="sm" className="items-center">
+                    <HeroIcon path={icons.documentText} className="w-7 h-7 text-white" />
+                    <ButtonText className="text-white font-bold text-xl">
+                      Choose PDF File
+                    </ButtonText>
+                  </HStack>
+                )}
+              </Button>
+
+              {/* Feature Highlights with Windows Colors */}
+              <HStack space="sm" className="items-center justify-center flex-wrap">
+                <Box className="badge-windows-red">
+                  <Text className="text-white font-bold text-xs">SIGN</Text>
+                </Box>
+                <Box className="badge-windows-orange">
+                  <Text className="text-white font-bold text-xs">TEXT</Text>
+                </Box>
+                <Box className="badge-windows-yellow">
+                  <Text className="text-white font-bold text-xs">DATE</Text>
+                </Box>
+                <Box className="badge-windows-green">
+                  <Text className="text-white font-bold text-xs">CHECK</Text>
+                </Box>
+              </HStack>
+
+              <Text className="text-center text-typography-600 text-sm font-medium max-w-xs leading-relaxed">
+                Add signatures, text fields, dates, and checkboxes to your PDF documents
+              </Text>
+            </VStack>
+
+          </VStack>
+        </Center>
       </Box>
     );
   }
 
-  // ===== RENDER EDITOR VIEW =====
+  // Editor View
   return (
-    <Box className="flex-1" style={{ backgroundColor: '#c0c0c0' }}>
+    <Box className="flex-1 bg-background-50">
       <StatusBar style="auto" />
       
-      {/* Retro Header */}
-      <Box className="px-4 py-3 border-b-2" style={{ 
-        background: 'linear-gradient(to bottom, #c0c0c0, #a0a0a0)',
-        borderBottomColor: '#808080',
-        boxShadow: 'inset -1px -1px 2px #808080, inset 1px 1px 2px #ffffff'
-      }}>
-        <HStack className="items-center justify-between">
-          <HStack space="md" className="items-center">
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded"
-              style={{
-                backgroundColor: '#c0c0c0',
-                borderColor: '#808080',
-                border: '2px outset #c0c0c0'
-              }}
-              onPress={() => setCurrentView('picker')}
-            >
-              <ButtonText style={{ 
-                color: '#ffffff', 
-                fontFamily: 'Orbitron, monospace', 
-                fontWeight: 'bold',
-                textShadow: '1px 1px 0px #000080'
-              }}>
-                ← BACK
-              </ButtonText>
-            </Button>
-            <VStack>
-              <Heading size="md" style={{ 
-                color: '#ffffff', 
-                fontFamily: 'Orbitron, monospace', 
-                fontWeight: 'bold',
-                textShadow: '1px 1px 0px #000080'
-              }}>
-                {selectedFile?.name || 'DOCUMENT.PDF'}
-              </Heading>
-              <Text size="sm" style={{ 
-                color: '#000080', 
-                fontFamily: 'Share Tech Mono, monospace',
-                backgroundColor: '#ffffff',
-                padding: '2px 6px',
-                borderRadius: '2px',
-                fontWeight: 'bold'
-              }}>
-                PAGE {currentPage}/{totalPages}
-              </Text>
-            </VStack>
-          </HStack>
-          
-          <HStack space="sm" className="items-center">
+      {/* Simple Header */}
+      <Box className="nav-fb border-b">
+        <Box className="px-4 py-3">
+          <HStack className="items-center justify-between">
+            <HStack space="md" className="items-center">
+              <Button
+                size="sm"
+                className="nav-fb-item"
+                onPress={() => setCurrentView('picker')}
+              >
+                <HStack space="xs" className="items-center">
+                  <HeroIcon path={icons.chevronLeft} className="w-4 h-4" />
+                  <ButtonText className="font-semibold">Back</ButtonText>
+                </HStack>
+              </Button>
+              <VStack>
+                <Heading size="md" className="text-typography-800 font-bold">
+                  {selectedFile?.name || 'Document.pdf'}
+                </Heading>
+                <Box className="badge-windows-green">
+                  <Text className="text-white font-bold text-xs">Page {currentPage} of {totalPages}</Text>
+                </Box>
+              </VStack>
+            </HStack>
+            
             {isRendering && (
-              <Box className="flex-row items-center space-x-2">
-                <Spinner size="small" />
-                <Text style={{ color: '#800000', fontFamily: 'monospace', fontSize: 10 }}>RENDERING...</Text>
-              </Box>
+              <HStack space="sm" className="items-center">
+                <div className="spinner-fb" />
+                <Text className="text-typography-600 text-sm">Rendering...</Text>
+              </HStack>
             )}
           </HStack>
-        </HStack>
+        </Box>
       </Box>
 
-      {/* Retro Toolbar */}
-      <Box className="px-4 py-2 border-b" style={{ 
-        backgroundColor: '#c0c0c0',
-        borderBottomColor: '#808080',
-        boxShadow: 'inset 0 -1px 1px #ffffff'
-      }}>
+      {/* Tools with Windows Logo Colors */}
+      <Box className="nav-fb border-b">
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <HStack space="sm" className="items-center">
-            {tools.map((tool) => (
-              <Button
-                key={tool.id}
-                size="sm"
-                className="rounded px-3"
-                style={{
-                  backgroundColor: '#c0c0c0',
-                  border: '2px outset #c0c0c0',
-                  boxShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-                }}
-                onPress={tool.action}
-              >
-                <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 11 }}>
-                  {tool.icon} {tool.label.toUpperCase()}
-                </ButtonText>
-              </Button>
-            ))}
+          <HStack space="sm" className="items-center px-4 py-2">
+            {tools.map((tool, index) => {
+              const colorClasses = [
+                'btn-windows-red',
+                'btn-windows-grey', 
+                'btn-windows-yellow',
+                'btn-windows-green'
+              ];
+              const animationClasses = [
+                'animate-glow-1',
+                'animate-glow-2',
+                'animate-glow-3',
+                'animate-glow-4'
+              ];
+              const colorClass = colorClasses[index % colorClasses.length];
+              const animationClass = animationClasses[index % animationClasses.length];
+              
+              return (
+                <Button
+                  key={tool.id}
+                  size="sm"
+                  className={`${colorClass} ${animationClass}`}
+                  onPress={tool.action}
+                >
+                  <HStack space="xs" className="items-center">
+                    <HeroIcon path={tool.icon} className="w-4 h-4 text-white" />
+                    <ButtonText className="text-white font-bold text-sm">{tool.label}</ButtonText>
+                  </HStack>
+                </Button>
+              );
+            })}
             
-            <Box className="mx-2 h-6 w-px" style={{ backgroundColor: '#808080' }} />
+            <Box className="w-px h-6 bg-outline-300 mx-2" />
             
             <Button
               size="sm"
-              className="rounded px-3"
-              style={{
-                backgroundColor: '#ff8080',
-                border: '2px outset #ff8080',
-                boxShadow: '1px 1px 2px rgba(0,0,0,0.3)'
-              }}
+              className="nav-fb-item bg-error-50 hover:bg-error-100"
               onPress={clearAllObjects}
             >
-              <ButtonText style={{ color: '#800000', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 11 }}>
-                🗑️ DELETE ALL
-              </ButtonText>
+              <HStack space="xs" className="items-center">
+                <HeroIcon path={icons.x} className="w-4 h-4 text-error-600" />
+                <ButtonText className="text-error-600 font-medium text-sm">Clear All</ButtonText>
+              </HStack>
             </Button>
           </HStack>
         </ScrollView>
       </Box>
 
-      {/* Main Content */}
-      <Box className="flex-1" style={{ backgroundColor: '#008080' }}>
-        <ScrollView className="flex-1" contentContainerStyle={{ minHeight: '100%', justifyContent: 'center' }} data-scroll-container>
-          <Center className="p-4">
-            <Box className="rounded-lg overflow-hidden relative" style={{
-              backgroundColor: '#ffffff',
-              border: '3px inset #c0c0c0',
-              boxShadow: '4px 4px 8px rgba(0,0,0,0.4)'
-            }}>
+      {/* PDF Viewer */}
+      <Box className="flex-1 bg-background-100">
+        <ScrollView className="flex-1" contentContainerStyle={{ minHeight: '100%', justifyContent: 'center' }}>
+          <Center className="p-6">
+            <Box className="window-xp shadow-xp rounded-xp overflow-hidden">
               {pdfError ? (
-                <Box className="p-8 text-center">
-                  <Text style={{ color: '#ff0000', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                    ❌ ERROR: {pdfError}
-                  </Text>
-                  <Button 
-                    className="mt-4 rounded"
-                    style={{
-                      backgroundColor: '#008080',
-                      border: '2px outset #008080'
-                    }}
-                    onPress={() => setCurrentView('picker')}
-                  >
-                    <ButtonText style={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                      TRY ANOTHER FILE
-                    </ButtonText>
-                  </Button>
+                <Box className="p-12 text-center">
+                  <VStack space="md" className="items-center">
+                    <HeroIcon path={icons.x} className="w-16 h-16 text-error-500" />
+                    <Heading className="text-error-600 text-lg font-semibold">
+                      PDF Loading Error
+                    </Heading>
+                    <Text className="text-error-500 font-medium">{pdfError}</Text>
+                    <Button className="btn-xp mt-4" onPress={() => setCurrentView('picker')}>
+                      <ButtonText className="text-white font-semibold">Try Another File</ButtonText>
+                    </Button>
+                  </VStack>
                 </Box>
               ) : (
-                <Box className="relative">
+                <Box className="relative bg-white">
                   <canvas
                     ref={canvasRef}
-                    onClick={handleCanvasClick}
                     style={{
                       display: 'block',
                       maxWidth: '100%',
@@ -1272,7 +890,6 @@ function AppContent() {
                     }}
                   />
                   
-                  {/* Overlay fields for current page */}
                   {getCurrentPageFields().map((object) => (
                     <EditableField
                       key={object.id}
@@ -1282,7 +899,7 @@ function AppContent() {
                       editing={editingId === object.id}
                       onUpdate={updateObject}
                       onSelect={setSelectedId}
-                      onStartEdit={handleStartEdit}
+                      onStartEdit={() => setEditingId(object.id)}
                       onFinishEdit={() => setEditingId(null)}
                     />
                   ))}
@@ -1293,133 +910,88 @@ function AppContent() {
         </ScrollView>
       </Box>
 
-      {/* Retro Bottom Navigation */}
-      <Box className="px-4 py-3 border-t-2" style={{ 
-        backgroundColor: '#c0c0c0',
-        borderTopColor: '#ffffff',
-        boxShadow: 'inset 0 1px 1px #ffffff, 0 -1px 1px #808080'
-      }}>
-        <HStack className="items-center justify-between">
-          <HStack space="sm" className="items-center">
-            <Button
-              size="sm"
-              className="rounded px-3"
-              style={{
-                backgroundColor: currentPage <= 1 ? '#a0a0a0' : '#c0c0c0',
-                border: '2px outset #c0c0c0',
-                opacity: currentPage <= 1 ? 0.5 : 1
-              }}
-              onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage <= 1}
-            >
-              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                ← PREV
-              </ButtonText>
-            </Button>
-            
-            <Box className="px-3 py-1 rounded" style={{ 
-              backgroundColor: '#000080',
-              border: '1px inset #000080'
-            }}>
-              <Text style={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                {currentPage}/{totalPages}
-              </Text>
-            </Box>
-            
-            <Button
-              size="sm"
-              className="rounded px-3"
-              style={{
-                backgroundColor: currentPage >= totalPages ? '#a0a0a0' : '#c0c0c0',
-                border: '2px outset #c0c0c0',
-                opacity: currentPage >= totalPages ? 0.5 : 1
-              }}
-              onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage >= totalPages}
-            >
-              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>
-                NEXT →
-              </ButtonText>
-            </Button>
-          </HStack>
-          
-          <HStack space="sm" className="items-center">
-            <Text style={{ color: '#008000', fontFamily: 'monospace', fontSize: 11 }}>ZOOM:</Text>
-            <Button
-              size="sm"
-              className="rounded"
-              style={{
-                backgroundColor: '#c0c0c0',
-                border: '2px outset #c0c0c0',
-                width: 32,
-                height: 32
-              }}
-              onPress={() => setScale(Math.max(0.25, scale - 0.25))}
-              disabled={scale <= 0.25}
-            >
-              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>−</ButtonText>
-            </Button>
-            <Box className="px-2 py-1 rounded" style={{ 
-              backgroundColor: '#000080',
-              border: '1px inset #000080',
-              minWidth: 50
-            }}>
-              <ButtonText 
-                style={{ color: '#ffffff', fontFamily: 'monospace', fontSize: 10, textAlign: 'center' }}
-                onPress={() => setScale(1.0)}
+      {/* Bottom Controls */}
+      <Box className="nav-fb border-t">
+        <Box className="px-4 py-3">
+          <HStack className="items-center justify-between">
+            <HStack space="sm" className="items-center">
+              <Button
+                size="sm"
+                className="btn-windows-red"
+                onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage <= 1}
               >
-                {Math.round(scale * 100)}%
-              </ButtonText>
-            </Box>
-            <Button
-              size="sm"
-              className="rounded"
-              style={{
-                backgroundColor: '#c0c0c0',
-                border: '2px outset #c0c0c0',
-                width: 32,
-                height: 32
-              }}
-              onPress={() => setScale(Math.min(4, scale + 0.25))}
-              disabled={scale >= 4}
-            >
-              <ButtonText style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold' }}>+</ButtonText>
-            </Button>
+                <HStack space="xs" className="items-center">
+                  <HeroIcon path={icons.chevronLeft} className="w-4 h-4 text-white" />
+                  <ButtonText className="text-white font-bold">Previous</ButtonText>
+                </HStack>
+              </Button>
+              
+              <Box className="badge-windows-yellow px-4 py-2">
+                <Text className="text-white font-bold font-mono">{currentPage} / {totalPages}</Text>
+              </Box>
+              
+              <Button
+                size="sm"
+                className="btn-windows-green"
+                onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                <HStack space="xs" className="items-center">
+                  <ButtonText className="text-white font-bold">Next</ButtonText>
+                  <HeroIcon path={icons.chevronRight} className="w-4 h-4 text-white" />
+                </HStack>
+              </Button>
+            </HStack>
+            
+            <HStack space="sm" className="items-center">
+              <Button
+                size="sm"
+                className="btn-windows-orange"
+                onPress={() => setScale(Math.max(0.25, scale - 0.25))}
+                disabled={scale <= 0.25}
+              >
+                <HeroIcon path={icons.zoomOut} className="w-4 h-4 text-white" />
+              </Button>
+              <Box className="badge-windows-red px-3 py-2">
+                <Text className="text-white font-bold font-mono text-xs" onPress={() => setScale(1.0)}>
+                  {Math.round(scale * 100)}%
+                </Text>
+              </Box>
+              <Button
+                size="sm"
+                className="btn-windows-orange"
+                onPress={() => setScale(Math.min(4, scale + 0.25))}
+                disabled={scale >= 4}
+              >
+                <HeroIcon path={icons.zoomIn} className="w-4 h-4 text-white" />
+              </Button>
+            </HStack>
           </HStack>
-        </HStack>
+        </Box>
       </Box>
 
-      {/* Retro Signature Modal */}
-      <Modal isOpen={showSignatureModal} onClose={handleCancelSignature}>
-        <ModalBackdrop style={{ backgroundColor: 'rgba(128,128,128,0.8)' }} />
-        <ModalContent className="rounded" style={{
-          backgroundColor: '#c0c0c0',
-          border: '3px outset #c0c0c0',
-          boxShadow: '4px 4px 8px rgba(0,0,0,0.5)'
-        }}>
-          <ModalHeader style={{ borderBottom: '2px inset #c0c0c0' }}>
+      {/* Signature Modal */}
+      <Modal isOpen={showSignatureModal} onClose={() => setShowSignatureModal(false)}>
+        <ModalBackdrop className="bg-black/50 backdrop-blur-sm" />
+        <ModalContent className="window-xp m-4 max-w-lg shadow-xp">
+          <ModalHeader className="window-xp-header">
             <HStack className="items-center justify-between w-full">
-              <Text style={{ color: '#000080', fontFamily: 'monospace', fontWeight: 'bold', fontSize: 16 }}>
-                SIGNATURE PAD v1.0
-              </Text>
+              <Heading className="text-white font-semibold text-shadow-xp">
+                Digital Signature
+              </Heading>
               <ModalCloseButton 
-                className="rounded"
-                style={{
-                  backgroundColor: '#ff8080',
-                  border: '2px outset #ff8080',
-                  width: 24,
-                  height: 24
-                }}
-                onPress={handleCancelSignature}
+                className="p-2 rounded-fb bg-error-500 shadow-fb"
+                onPress={() => setShowSignatureModal(false)}
               >
-                <Text style={{ color: '#800000', fontFamily: 'monospace', fontWeight: 'bold' }}>×</Text>
+                <HeroIcon path={icons.x} className="w-4 h-4 text-white" />
               </ModalCloseButton>
             </HStack>
           </ModalHeader>
-          <ModalBody style={{ backgroundColor: '#c0c0c0' }}>
+          <ModalBody className="bg-background-0 p-6">
             <SignaturePad 
               onSave={handleSaveSignature}
-              onCancel={handleCancelSignature}
+              onCancel={() => setShowSignatureModal(false)}
             />
           </ModalBody>
         </ModalContent>

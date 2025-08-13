@@ -1,3 +1,762 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Windows XP + Facebook Modern Theme Global Styles */
+
+/* Custom CSS Variables for Windows logo-inspired gradients and effects */
+:root {
+  /* Windows Logo Multi-Color Gradients */
+  --windows-logo-gradient: linear-gradient(135deg, 
+    rgb(var(--color-secondary-500)) 0%,     /* Red */
+    rgb(var(--color-warning-500)) 25%,      /* Orange */
+    rgb(var(--color-info-500)) 50%,         /* Yellow */
+    rgb(var(--color-tertiary-500)) 75%,     /* Green */
+    rgb(var(--color-primary-500)) 100%);    /* Blue */
+    
+  --windows-subtle-gradient: linear-gradient(135deg,
+    rgb(var(--color-secondary-100)) 0%,     /* Light red */
+    rgb(var(--color-warning-100)) 25%,      /* Light orange */
+    rgb(var(--color-info-100)) 50%,         /* Light yellow */
+    rgb(var(--color-tertiary-100)) 75%,     /* Light green */
+    rgb(var(--color-primary-100)) 100%);    /* Light blue */
+
+  /* XP Button Gradients with Windows colors */
+  --xp-button-gradient: linear-gradient(to bottom, 
+    rgb(var(--color-primary-100)), 
+    rgb(var(--color-primary-300)), 
+    rgb(var(--color-primary-500)));
+    
+  --xp-button-red-gradient: linear-gradient(to bottom,
+    rgb(var(--color-secondary-100)),
+    rgb(var(--color-secondary-300)),
+    rgb(var(--color-secondary-500)));
+    
+  --xp-button-orange-gradient: linear-gradient(to bottom,
+    rgb(var(--color-warning-100)),
+    rgb(var(--color-warning-300)),
+    rgb(var(--color-warning-500)));
+    
+  --xp-button-yellow-gradient: linear-gradient(to bottom,
+    rgb(var(--color-info-100)),
+    rgb(var(--color-info-300)),
+    rgb(var(--color-info-500)));
+    
+  --xp-button-green-gradient: linear-gradient(to bottom,
+    rgb(var(--color-tertiary-100)),
+    rgb(var(--color-tertiary-300)),
+    rgb(var(--color-tertiary-500)));
+  
+  --xp-button-hover-gradient: linear-gradient(to bottom, 
+    rgb(var(--color-primary-50)), 
+    rgb(var(--color-primary-200)), 
+    rgb(var(--color-primary-400)));
+    
+  --xp-button-active-gradient: linear-gradient(to bottom, 
+    rgb(var(--color-primary-600)), 
+    rgb(var(--color-primary-400)), 
+    rgb(var(--color-primary-200)));
+
+  /* Windows Logo Animated Gradient */
+  --windows-animated-gradient: linear-gradient(-45deg, 
+    rgb(var(--color-secondary-500)),    /* Red */
+    rgb(var(--color-warning-500)),      /* Orange */
+    rgb(var(--color-info-500)),         /* Yellow */
+    rgb(var(--color-tertiary-500)),     /* Green */
+    rgb(var(--color-primary-500)),      /* Blue */
+    rgb(var(--color-secondary-500)),    /* Red again */
+    rgb(var(--color-warning-500)));     /* Orange again */
+
+  /* XP Window Chrome Gradients */
+  --xp-window-gradient: linear-gradient(to bottom,
+    rgb(var(--color-primary-200)),
+    rgb(var(--color-primary-400)),
+    rgb(var(--color-primary-600)));
+    
+  --xp-inactive-gradient: linear-gradient(to bottom,
+    rgb(var(--color-secondary-200)),
+    rgb(var(--color-secondary-400)),
+    rgb(var(--color-secondary-600)));
+
+  /* Facebook Card Shadows with Windows colors */
+  --fb-card-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.1);
+  --fb-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.12), 0 12px 20px rgba(0, 0, 0, 0.15);
+  --fb-windows-shadow: 0 4px 12px rgba(var(--color-primary-500), 0.2), 
+                       0 8px 24px rgba(var(--color-secondary-500), 0.1);
+  
+  /* XP Window Shadows */
+  --xp-window-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+  --xp-inset-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.8), 
+                     inset -1px -1px 0 rgba(0, 0, 0, 0.2);
+  
+  /* Border Styles */
+  --xp-raised-border: 1px solid rgb(var(--color-outline-300));
+  --xp-sunken-border: 1px solid rgb(var(--color-outline-600));
+  
+  /* Transitions */
+  --smooth-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --fb-transition: all 0.15s ease-out;
+  --windows-animation: background-position 3s ease infinite;
+}
+
+
+.dark {
+  /* Dark mode overrides */
+  --xp-button-gradient: linear-gradient(to bottom, 
+    rgb(var(--color-primary-400)), 
+    rgb(var(--color-primary-500)), 
+    rgb(var(--color-primary-600)));
+    
+  --xp-window-gradient: linear-gradient(to bottom,
+    rgb(var(--color-secondary-700)),
+    rgb(var(--color-secondary-800)),
+    rgb(var(--color-secondary-900)));
+    
+  --fb-card-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 8px 16px rgba(0, 0, 0, 0.4);
+  --fb-hover-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), 0 12px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Base layer customizations */
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: rgb(var(--color-background-50));
+    color: rgb(var(--color-typography-700));
+  }
+}
+
+/* Component layer - XP/Facebook inspired components */
+@layer components {
+  
+  /* Windows Logo Themed Buttons */
+  .btn-xp {
+    @apply relative px-4 py-2 rounded-xl border font-medium text-sm;
+    background: var(--xp-button-gradient);
+    border: var(--xp-raised-border);
+    box-shadow: var(--xp-inset-shadow), 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: var(--smooth-transition);
+    color: white;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  .btn-xp:hover {
+    background: var(--xp-button-hover-gradient);
+    box-shadow: var(--xp-inset-shadow), 0 2px 6px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+  }
+  
+  .btn-xp:active {
+    background: var(--xp-button-active-gradient);
+    box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.3);
+    transform: translateY(0);
+  }
+  
+  /* Windows Logo Colored Buttons */
+  .btn-windows-red {
+    @apply relative px-4 py-2 rounded-xl border font-medium text-sm;
+    background: var(--xp-button-red-gradient);
+    border: var(--xp-raised-border);
+    box-shadow: var(--xp-inset-shadow), 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: var(--smooth-transition);
+    color: white;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  .btn-windows-orange {
+    @apply relative px-4 py-2 rounded-xl border font-medium text-sm;
+    background: var(--xp-button-orange-gradient);
+    border: var(--xp-raised-border);
+    box-shadow: var(--xp-inset-shadow), 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: var(--smooth-transition);
+    color: white;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  .btn-windows-yellow {
+    @apply relative px-4 py-2 rounded-xl border font-medium text-sm;
+    background: var(--xp-button-yellow-gradient);
+    border: var(--xp-raised-border);
+    box-shadow: var(--xp-inset-shadow), 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: var(--smooth-transition);
+    color: white;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  .btn-windows-green {
+    @apply relative px-4 py-2 rounded-xl border font-medium text-sm;
+    background: var(--xp-button-green-gradient);
+    border: var(--xp-raised-border);
+    box-shadow: var(--xp-inset-shadow), 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: var(--smooth-transition);
+    color: white;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  .btn-windows-grey {
+    @apply relative px-4 py-2 rounded-xl border font-medium text-sm;
+    background: linear-gradient(to bottom, #9ca3af, #6b7280, #4b5563);
+    border: var(--xp-raised-border);
+    box-shadow: var(--xp-inset-shadow), 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: var(--smooth-transition);
+    color: white;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Windows Logo Animated Button */
+  .btn-windows-animated {
+    @apply relative px-6 py-3 rounded-lg border-2 font-bold text-lg;
+    background: var(--windows-animated-gradient);
+    background-size: 400% 400%;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    animation: windowsGradientShift 3s ease infinite;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+  }
+  
+  .btn-windows-animated:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    animation-duration: 1.5s;
+  }
+  
+  /* Windows Logo Themed Cards */
+  .card-fb {
+    @apply bg-background-0 rounded-lg border border-outline-200;
+    box-shadow: var(--fb-card-shadow);
+    transition: var(--fb-transition);
+  }
+  
+  .card-fb:hover {
+    box-shadow: var(--fb-hover-shadow);
+    transform: translateY(-2px);
+  }
+  
+  .card-windows {
+    @apply bg-background-0 rounded-lg border-2;
+    border: 2px solid transparent;
+    background-image: linear-gradient(white, white), var(--windows-logo-gradient);
+    background-origin: border-box;
+    background-clip: content-box, border-box;
+    box-shadow: var(--fb-windows-shadow);
+    transition: var(--fb-transition);
+  }
+  
+  .card-windows:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(var(--color-primary-500), 0.3), 
+                0 15px 35px rgba(var(--color-secondary-500), 0.15);
+  }
+  
+  /* Windows Logo Upload Zone */
+  .upload-zone-windows {
+    @apply rounded-2xl border-4 border-dashed relative overflow-hidden;
+    border-color: transparent;
+    background: linear-gradient(white, white) padding-box,
+                var(--windows-logo-gradient) border-box;
+    transition: all 0.3s ease;
+  }
+  
+  .upload-zone-windows:hover {
+    transform: scale(1.02);
+    box-shadow: 0 10px 30px rgba(var(--color-primary-500), 0.2);
+  }
+  
+  .upload-zone-windows::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--windows-subtle-gradient);
+    opacity: 0.05;
+    pointer-events: none;
+  }
+  
+  /* XP Style Windows/Panels */
+  .window-xp {
+    @apply bg-background-0 border-2 rounded-sm;
+    border-color: rgb(var(--color-outline-400));
+    box-shadow: var(--xp-window-shadow);
+  }
+  
+  .window-xp-header {
+    background: var(--xp-window-gradient);
+    @apply px-3 py-2 text-white font-semibold text-sm rounded-t-sm;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+  }
+  
+  .window-xp-inactive .window-xp-header {
+    background: var(--xp-inactive-gradient);
+    @apply text-typography-600;
+  }
+  
+  /* XP Style Input Fields */
+  .input-xp {
+    @apply px-3 py-2 border-2 bg-background-0 rounded-sm;
+    border-color: rgb(var(--color-outline-500));
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.1);
+    transition: var(--smooth-transition);
+  }
+  
+  .input-xp:focus {
+    outline: none;
+    border-color: rgb(var(--color-primary-500));
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.1), 
+                0 0 0 1px rgb(var(--color-primary-400) / 0.3);
+  }
+  
+  /* Facebook Style Navigation */
+  .nav-fb {
+    @apply bg-background-0 border-b border-outline-200;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(8px);
+  }
+  
+  .nav-fb-item {
+    @apply px-4 py-3 rounded-lg transition-all duration-200;
+    @apply hover:bg-secondary-100 active:bg-secondary-200;
+  }
+  
+  .nav-fb-item.active {
+    @apply bg-primary-50 text-primary-600 border-b-2 border-primary-500;
+  }
+  
+  /* XP Style Toolbar */
+  .toolbar-xp {
+    @apply px-2 py-1 border-b-2 bg-background-50;
+    border-color: rgb(var(--color-outline-300));
+    background: linear-gradient(to bottom, 
+      rgb(var(--color-background-0)), 
+      rgb(var(--color-background-100)));
+  }
+  
+  .toolbar-xp-button {
+    @apply p-2 rounded-sm border border-transparent hover:border-outline-300;
+    @apply hover:bg-background-200 active:bg-background-300;
+    transition: var(--smooth-transition);
+  }
+  
+  /* Facebook Style List Items */
+  .list-item-fb {
+    @apply px-4 py-3 border-b border-outline-100 hover:bg-background-50;
+    @apply transition-colors duration-150;
+  }
+  
+  .list-item-fb:last-child {
+    @apply border-b-0;
+  }
+  
+  /* XP Style Tabs */
+  .tabs-xp {
+    @apply flex border-b-2 border-outline-300;
+  }
+  
+  .tab-xp {
+    @apply px-4 py-2 border border-outline-300 bg-background-100;
+    @apply hover:bg-background-50 cursor-pointer;
+    margin-bottom: -2px;
+    border-bottom: none;
+    transition: var(--smooth-transition);
+  }
+  
+  .tab-xp.active {
+    @apply bg-background-0 border-b-2 border-background-0;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .tab-xp:not(.active) {
+    @apply text-typography-600;
+  }
+  
+  /* Windows Logo Badges */
+  .badge-fb {
+    @apply inline-flex items-center px-2 py-1 rounded-full text-xs font-medium;
+    @apply bg-primary-100 text-primary-800;
+  }
+  
+  .badge-windows-red {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold;
+    background: linear-gradient(135deg, rgb(var(--color-secondary-400)), rgb(var(--color-secondary-600)));
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 4px rgba(var(--color-secondary-500), 0.3);
+  }
+  
+  .badge-windows-orange {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold;
+    background: linear-gradient(135deg, rgb(var(--color-warning-400)), rgb(var(--color-warning-600)));
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 4px rgba(var(--color-warning-500), 0.3);
+  }
+  
+  .badge-windows-yellow {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold;
+    background: linear-gradient(135deg, rgb(var(--color-info-400)), rgb(var(--color-info-600)));
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 4px rgba(var(--color-info-500), 0.3);
+  }
+  
+  .badge-windows-green {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold;
+    background: linear-gradient(135deg, rgb(var(--color-tertiary-400)), rgb(var(--color-tertiary-600)));
+    color: white;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 4px rgba(var(--color-tertiary-500), 0.3);
+  }
+  
+  .badge-fb-success {
+    @apply bg-success-100 text-success-800;
+  }
+  
+  .badge-fb-warning {
+    @apply bg-warning-100 text-warning-800;
+  }
+  
+  .badge-fb-error {
+    @apply bg-error-100 text-error-800;
+  }
+  
+  /* XP Style Progress Bar */
+  .progress-xp {
+    @apply w-full h-4 border border-outline-400 bg-background-100 rounded-sm;
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  
+  .progress-xp-fill {
+    @apply h-full rounded-sm;
+    background: var(--xp-button-gradient);
+    transition: width 0.3s ease-in-out;
+  }
+  
+  /* Facebook Style Avatar */
+  .avatar-fb {
+    @apply rounded-full border-2 border-background-0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* XP Style Menu */
+  .menu-xp {
+    @apply bg-background-0 border border-outline-300 rounded-sm;
+    box-shadow: var(--xp-window-shadow);
+  }
+  
+  .menu-xp-item {
+    @apply px-4 py-2 hover:bg-primary-500 hover:text-white cursor-pointer;
+    transition: var(--smooth-transition);
+  }
+  
+  .menu-xp-separator {
+    @apply border-t border-outline-200 my-1;
+  }
+  
+  /* Facebook Style Loading Spinner */
+  .spinner-fb {
+    @apply inline-block w-4 h-4 border-2 border-outline-300 border-t-primary-500 rounded-full;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* XP Style Checkbox */
+  .checkbox-xp {
+    @apply appearance-none w-4 h-4 border border-outline-500 bg-background-0;
+    @apply checked:bg-primary-500 checked:border-primary-500;
+    box-shadow: inset 1px 1px 1px rgba(0, 0, 0, 0.1);
+  }
+  
+  .checkbox-xp:checked {
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='m13.854 3.646-7.5 7.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6 10.293l7.146-7.147a.5.5 0 0 1 .708.708z'/%3e%3c/svg%3e");
+  }
+  
+  /* Facebook Style Toggle */
+  .toggle-fb {
+    @apply relative inline-block w-12 h-6 bg-outline-300 rounded-full;
+    @apply transition-colors duration-200 cursor-pointer;
+  }
+  
+  .toggle-fb.active {
+    @apply bg-primary-500;
+  }
+  
+  .toggle-fb::after {
+    @apply absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full;
+    @apply transition-transform duration-200;
+    content: '';
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+  
+  .toggle-fb.active::after {
+    @apply transform translate-x-6;
+  }
+}
+
+/* Utility layer - Windows logo utilities */
+@layer utilities {
+  .text-shadow-xp {
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  .text-windows-gradient {
+    background: var(--windows-logo-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: bold;
+  }
+  
+  .shadow-xp {
+    box-shadow: var(--xp-window-shadow);
+  }
+  
+  .shadow-xp-inset {
+    box-shadow: var(--xp-inset-shadow);
+  }
+  
+  .shadow-fb {
+    box-shadow: var(--fb-card-shadow);
+  }
+  
+  .shadow-fb-hover {
+    box-shadow: var(--fb-hover-shadow);
+  }
+  
+  .shadow-windows {
+    box-shadow: var(--fb-windows-shadow);
+  }
+  
+  .gradient-xp-button {
+    background: var(--xp-button-gradient);
+  }
+  
+  .gradient-xp-window {
+    background: var(--xp-window-gradient);
+  }
+  
+  .gradient-windows-logo {
+    background: var(--windows-logo-gradient);
+  }
+  
+  .gradient-windows-subtle {
+    background: var(--windows-subtle-gradient);
+  }
+  
+  .gradient-windows-animated {
+    background: var(--windows-animated-gradient);
+    background-size: 400% 400%;
+    animation: windowsGradientShift 3s ease infinite;
+  }
+  
+  .border-xp-raised {
+    border: var(--xp-raised-border);
+  }
+  
+  .border-xp-sunken {
+    border: var(--xp-sunken-border);
+  }
+  
+  .border-windows-gradient {
+    border: 2px solid transparent;
+    background-image: linear-gradient(white, white), var(--windows-logo-gradient);
+    background-origin: border-box;
+    background-clip: content-box, border-box;
+  }
+  
+  .transition-xp {
+    transition: var(--smooth-transition);
+  }
+  
+  .transition-fb {
+    transition: var(--fb-transition);
+  }
+  
+  .transition-windows {
+    transition: var(--windows-animation);
+  }
+  
+  /* Glass morphism effect with Windows colors */
+  .glass-fb {
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .glass-windows {
+    backdrop-filter: blur(15px);
+    background: linear-gradient(135deg, 
+      rgba(var(--color-primary-500), 0.1) 0%,
+      rgba(var(--color-secondary-500), 0.05) 25%,
+      rgba(var(--color-warning-500), 0.05) 50%,
+      rgba(var(--color-tertiary-500), 0.05) 75%,
+      rgba(var(--color-primary-500), 0.1) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  
+  .dark .glass-fb {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .dark .glass-windows {
+    background: linear-gradient(135deg, 
+      rgba(var(--color-primary-500), 0.2) 0%,
+      rgba(var(--color-secondary-500), 0.1) 25%,
+      rgba(var(--color-warning-500), 0.1) 50%,
+      rgba(var(--color-tertiary-500), 0.1) 75%,
+      rgba(var(--color-primary-500), 0.2) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Windows Logo Animation Keyframes */
+@keyframes windowsGradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes windowsPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes windowsFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Light blue gradient for title */
+.text-light-blue-gradient {
+  background: linear-gradient(135deg, #87CEEB 0%, #4682B4 50%, #5F9EA0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: bold;
+}
+
+/* Grey badge style */
+.badge-windows-grey {
+  @apply inline-flex items-center px-3 py-1 rounded-2xl text-xs font-bold;
+  background: linear-gradient(135deg, #6B7280, #4B5563);
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 4px rgba(107, 114, 128, 0.3);
+}
+
+/* Pulsing animation */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.animate-pulse-icon {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Staggered animations for multiple elements */
+.animate-stagger-1 {
+  animation: fadeInScale 0.8s ease-out 0.1s both;
+}
+
+.animate-stagger-2 {
+  animation: fadeInScale 0.8s ease-out 0.3s both;
+}
+
+.animate-stagger-3 {
+  animation: fadeInScale 0.8s ease-out 0.5s both;
+}
+
+.animate-stagger-4 {
+  animation: fadeInScale 0.8s ease-out 0.7s both;
+}
+
+/* Continuous alternating glow animation */
+.animate-glow-1 {
+  animation: glowPulse 4s ease-in-out infinite;
+}
+
+.animate-glow-2 {
+  animation: glowPulse 4s ease-in-out 1s infinite;
+}
+
+.animate-glow-3 {
+  animation: glowPulse 4s ease-in-out 2s infinite;
+}
+
+.animate-glow-4 {
+  animation: glowPulse 4s ease-in-out 3s infinite;
+}
+
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  25% {
+    opacity: 0.9;
+    transform: scale(1.02);
+    filter: brightness(1.2);
+  }
+}
+
+/* Floating animation for badge */
+.animate-float {
+  animation: floatUpDown 3s ease-in-out infinite;
+}
+
+@keyframes floatUpDown {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
