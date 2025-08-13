@@ -81,6 +81,7 @@ import { Modal, ModalBackdrop, ModalContent, ModalHeader, ModalCloseButton, Moda
 import { Badge, BadgeText } from './components/ui/badge';
 import { Center } from './components/ui/center';
 import { Spinner } from './components/ui/spinner';
+import { Pressable } from './components/ui/pressable';
 import { Toast, ToastDescription, useToast } from './components/ui/toast';
 
 // Universal file reading
@@ -184,7 +185,7 @@ function usePDFEditor(pdfBase64) {
     }
   }, [pdfBase64, pdfDocument, pdfLoaded, pdfError]);
 
-  // PDF Rendering Effect
+  // PDF Rendering Effect - Restored to working version
   useEffect(() => {
     if (!pdfDocument || !pdfLoaded || !canvasRef.current) return;
     
@@ -202,20 +203,27 @@ function usePDFEditor(pdfBase64) {
         if (!canvas || isCancelled) return;
         
         const context = canvas.getContext('2d');
+        
+        // Standard quality rendering
         const devicePixelRatio = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale: scale * devicePixelRatio });
         
+        // Set actual canvas size for high DPI
         canvas.width = viewport.width;
         canvas.height = viewport.height;
+        
+        // Scale canvas back down using CSS for crisp display
         canvas.style.width = `${viewport.width / devicePixelRatio}px`;
         canvas.style.height = `${viewport.height / devicePixelRatio}px`;
         
+        // Scale the drawing context to match device pixel ratio
         context.scale(devicePixelRatio, devicePixelRatio);
+        
         context.clearRect(0, 0, canvas.width, canvas.height);
         
         const renderContext = {
           canvasContext: context,
-          viewport: page.getViewport({ scale })
+          viewport: page.getViewport({ scale }) // Use original scale for rendering context
         };
         
         await page.render(renderContext).promise;
@@ -363,7 +371,7 @@ function usePDFEditor(pdfBase64) {
   };
 }
 
-// Signature Drawing Component
+// Signature Drawing Component - Updated styling to match current theme
 const SignaturePad = React.memo(({ onSave, onCancel }) => {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -445,107 +453,371 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
   }, [isDrawing, draw, stopDrawing]);
 
   return (
-    <VStack space="md" className="items-center">
-      <Heading size="lg" className="text-primary-600 font-semibold flex items-center">
-        <HeroIcon path={icons.pencil} className="w-6 h-6 mr-2 text-primary-500" />
-        <span className="text-windows-gradient">Create Your Signature</span>
+    <VStack space="lg" className="items-center p-6">
+      <Heading size="lg" className="text-typography-800 font-bold text-center">
+        Create Your Signature
       </Heading>
       
-      <Box className="window-xp p-4">
-        <canvas
-          ref={canvasRef}
-          onMouseDown={startDrawing}
-          className="shadow-xp-inset rounded-xp bg-background-0 border-2 border-outline-300"
-          style={{
-            cursor: 'crosshair',
-            display: 'block',
-            width: '400px',
-            height: '200px'
-          }}
-        />
+      {/* Canvas Container - Modern styling */}
+      <Box className="w-full max-w-md">
+        <Box className="w-full h-48 rounded-2xl border-2 border-outline-300 bg-white shadow-sm overflow-hidden">
+          <canvas
+            ref={canvasRef}
+            onMouseDown={startDrawing}
+            style={{
+              cursor: 'crosshair',
+              display: 'block',
+              width: '100%',
+              height: '100%'
+            }}
+          />
+        </Box>
+        <Text className="text-center text-typography-500 text-sm mt-2 font-medium">
+          Click and drag to draw your signature
+        </Text>
       </Box>
       
-      <Text className="text-typography-600 text-sm font-medium">
-        Click and drag to draw your signature
-      </Text>
-      
-      <HStack space="md" className="items-center">
-        <Button className="btn-windows-grey" onPress={clearSignature}>
-          <HeroIcon path={icons.refresh} className="w-4 h-4 mr-2 text-white" />
-          <ButtonText className="text-white font-bold">Clear</ButtonText>
-        </Button>
+      {/* Action Buttons - Circular style matching our theme */}
+      <HStack space="lg" className="items-center justify-center">
+        <Pressable
+          onPress={clearSignature}
+          className="items-center"
+        >
+          <Box className="w-12 h-12 rounded-full bg-warning-500 flex items-center justify-center mb-1 shadow-sm">
+            <HeroIcon path={icons.refresh} className="w-6 h-6 text-white" />
+          </Box>
+          <Text className="text-xs font-medium text-typography-600">Clear</Text>
+        </Pressable>
         
-        <Button className="btn-windows-red" onPress={onCancel}>
-          <HeroIcon path={icons.x} className="w-4 h-4 mr-2 text-white" />
-          <ButtonText className="text-white font-bold">Cancel</ButtonText>
-        </Button>
+        <Pressable
+          onPress={onCancel}
+          className="items-center"
+        >
+          <Box className="w-12 h-12 rounded-full bg-error-500 flex items-center justify-center mb-1 shadow-sm">
+            <HeroIcon path={icons.x} className="w-6 h-6 text-white" />
+          </Box>
+          <Text className="text-xs font-medium text-typography-600">Cancel</Text>
+        </Pressable>
         
-        <Button className="btn-windows-green" onPress={saveSignature}>
-          <HeroIcon path={icons.check} className="w-4 h-4 mr-2 text-white" />
-          <ButtonText className="text-white font-bold">Save</ButtonText>
-        </Button>
+        <Pressable
+          onPress={saveSignature}
+          className="items-center"
+        >
+          <Box className="w-12 h-12 rounded-full bg-tertiary-500 flex items-center justify-center mb-1 shadow-sm">
+            <HeroIcon path={icons.check} className="w-6 h-6 text-white" />
+          </Box>
+          <Text className="text-xs font-medium text-typography-600">Save</Text>
+        </Pressable>
       </HStack>
     </VStack>
   );
 });
 
-// Simple Editable Field Component
+// Smooth Editable Field Component with enhanced drag animation
 const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, onSelect, onStartEdit, onFinishEdit }) => {
   const [value, setValue] = useState(object.content || '');
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [resizeStart, setResizeStart] = useState({ width: 0, height: 0, mouseX: 0, mouseY: 0 });
 
   useEffect(() => {
     setValue(object.content || '');
   }, [object.content]);
 
+  // Enhanced field styling with smooth animations
   const fieldStyle = useMemo(() => ({
     position: 'absolute',
     left: `${object.x * scale}px`,
     top: `${object.y * scale}px`,
     width: `${object.width * scale}px`,
     height: `${object.height * scale}px`,
-    fontSize: object.fontSize ? `${object.fontSize * scale}px` : undefined,
+    fontSize: object.fontSize ? `${object.fontSize * scale}px` : `${12 * scale}px`,
     color: object.color || '#000000',
     border: selected ? '2px solid rgb(var(--color-primary-500))' : '1px solid transparent',
-    backgroundColor: selected ? 'rgba(var(--color-primary-50), 0.1)' : 'transparent',
-    borderRadius: '4px',
+    backgroundColor: selected ? 'rgba(var(--color-primary-50), 0.1)' : 'rgba(255, 255, 255, 0.9)',
+    borderRadius: '6px',
     padding: '4px',
-    cursor: isDragging ? 'grabbing' : (selected ? 'grab' : 'pointer'),
+    cursor: isDragging ? 'grabbing' : isResizing ? 'se-resize' : (selected ? 'grab' : 'pointer'),
     zIndex: selected ? 1000 : 100,
     boxSizing: 'border-box',
     display: 'flex',
     alignItems: 'center',
     justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start',
     userSelect: editing ? 'auto' : 'none',
-    boxShadow: selected ? '0 2px 8px rgba(var(--color-primary-500), 0.3)' : 'none',
-    transition: 'all 0.2s ease',
-    fontFamily: 'Inter, system-ui, sans-serif'
-  }), [object, scale, selected, isDragging, editing]);
+    boxShadow: selected ? '0 4px 12px rgba(var(--color-primary-500), 0.3)' : '0 1px 3px rgba(0, 0, 0, 0.1)',
+    transition: isDragging || isResizing ? 'none' : 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+    transform: isDragging ? 'scale(1.02)' : 'scale(1)',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontWeight: '500',
+    willChange: isDragging || isResizing ? 'transform' : 'auto'
+  }), [object, scale, selected, isDragging, editing, isResizing]);
 
-  return (
-    <div style={fieldStyle} onClick={() => onSelect(object.id)}>
-      {object.type === 'checkbox' ? (
-        <div className={`checkbox-xp ${object.content ? 'checked' : ''}`} style={{ 
-          fontSize: '14px',
+  const handleContentChange = useCallback((e) => {
+    if (object.type === 'checkbox') {
+      const newValue = !object.content;
+      setValue(newValue);
+      onUpdate(object.id, { content: newValue });
+    } else {
+      const newValue = e.target.value;
+      setValue(newValue);
+      onUpdate(object.id, { content: newValue });
+    }
+  }, [object.id, object.type, object.content, onUpdate]);
+
+  const handleMouseDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const now = Date.now();
+    const isDoubleClick = now - lastClickTime < 300;
+    
+    setLastClickTime(now);
+    
+    // Select the field first
+    onSelect(object.id);
+    
+    if (isDoubleClick && !editing) {
+      // Double click to edit
+      if (object.type === 'signature') {
+        onStartEdit(object.id);
+      } else {
+        onStartEdit(object.id);
+      }
+      return;
+    }
+    
+    if (object.type === 'checkbox' && !editing) {
+      // Single click toggles checkbox
+      if (!isDoubleClick) {
+        setTimeout(() => {
+          if (Date.now() - lastClickTime >= 300) {
+            handleContentChange({ target: { value: !object.content } });
+          }
+        }, 300);
+      }
+    }
+    
+    // Start drag operation with smooth animation
+    if (!editing) {
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX - object.x * scale,
+        y: e.clientY - object.y * scale
+      });
+      
+      // Add smooth drag class
+      document.body.style.userSelect = 'none';
+    }
+  }, [lastClickTime, editing, object.id, object.type, object.x, object.y, scale, onSelect, onStartEdit, handleContentChange, object.content]);
+
+  const handleResizeMouseDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsResizing(true);
+    setResizeStart({
+      width: object.width,
+      height: object.height,
+      mouseX: e.clientX,
+      mouseY: e.clientY
+    });
+    
+    document.body.style.userSelect = 'none';
+  }, [object.width, object.height]);
+
+  const handleMouseMove = useCallback((e) => {
+    if (isDragging && !editing) {
+      e.preventDefault();
+      
+      // Use requestAnimationFrame for smooth updates
+      requestAnimationFrame(() => {
+        const newX = (e.clientX - dragStart.x) / scale;
+        const newY = (e.clientY - dragStart.y) / scale;
+        
+        onUpdate(object.id, { 
+          x: Math.max(0, newX), 
+          y: Math.max(0, newY) 
+        });
+      });
+    } else if (isResizing) {
+      e.preventDefault();
+      
+      requestAnimationFrame(() => {
+        const deltaX = e.clientX - resizeStart.mouseX;
+        const deltaY = e.clientY - resizeStart.mouseY;
+        
+        const newWidth = Math.max(30 / scale, resizeStart.width + deltaX / scale);
+        const newHeight = Math.max(20 / scale, resizeStart.height + deltaY / scale);
+        
+        onUpdate(object.id, { width: newWidth, height: newHeight });
+      });
+    }
+  }, [isDragging, isResizing, editing, dragStart, resizeStart, scale, object.id, onUpdate]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    setIsResizing(false);
+    document.body.style.userSelect = '';
+  }, []);
+
+  // Add global mouse event listeners for dragging and resizing
+  useEffect(() => {
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+
+  const renderFieldContent = () => {
+    if (object.type === 'checkbox') {
+      return (
+        <div style={{ 
+          fontSize: `${14 * scale}px`, 
+          userSelect: 'none', 
+          pointerEvents: editing ? 'none' : 'auto',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: '20px',
-          height: '20px'
+          width: '100%',
+          height: '100%',
+          fontWeight: 'bold',
+          color: object.content ? '#16a34a' : '#dc2626'
         }}>
-          {object.content ? '✓' : ''}
+          {object.content ? '✓' : '✗'}
         </div>
+      );
+    }
+    
+    if (object.type === 'signature') {
+      if (object.content && object.content.startsWith('data:image')) {
+        return (
+          <img
+            src={object.content}
+            alt="Signature"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              pointerEvents: 'none'
+            }}
+          />
+        );
+      } else {
+        return (
+          <div style={{ 
+            width: '100%', 
+            height: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            color: 'rgb(var(--color-typography-400))',
+            fontSize: `${10 * scale}px`,
+            fontStyle: 'italic',
+            border: '2px dashed rgb(var(--color-outline-300))',
+            borderRadius: '4px'
+          }}>
+            {editing ? 'Draw signature...' : 'Click to sign'}
+          </div>
+        );
+      }
+    }
+    
+    if (editing && object.type !== 'signature') {
+      return object.type === 'text' ? (
+        <textarea
+          value={value}
+          onChange={handleContentChange}
+          onBlur={onFinishEdit}
+          autoFocus
+          placeholder="Enter text..."
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            background: 'transparent',
+            resize: 'none',
+            outline: 'none',
+            fontSize: 'inherit',
+            color: 'inherit',
+            padding: '2px',
+            fontFamily: 'inherit',
+            fontWeight: 'inherit'
+          }}
+        />
       ) : (
-        <div style={{ 
-          width: '100%', 
-          height: '100%', 
-          overflow: 'hidden',
-          display: 'flex',
-          alignItems: 'center',
-          fontWeight: '500'
-        }}>
-          {value || `[${object.type}]`}
-        </div>
+        <input
+          type={object.type === 'date' ? 'date' : 'text'}
+          value={value}
+          onChange={handleContentChange}
+          onBlur={onFinishEdit}
+          autoFocus
+          placeholder={`Enter ${object.type}...`}
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            background: 'transparent',
+            outline: 'none',
+            fontSize: 'inherit',
+            color: 'inherit',
+            padding: '2px',
+            fontFamily: 'inherit',
+            fontWeight: 'inherit'
+          }}
+        />
+      );
+    }
+    
+    return (
+      <div style={{ 
+        width: '100%', 
+        height: '100%', 
+        overflow: 'hidden', 
+        pointerEvents: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start',
+        fontWeight: 'inherit'
+      }}>
+        {value || `[${object.type}]`}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      style={fieldStyle}
+      onMouseDown={handleMouseDown}
+    >
+      {renderFieldContent()}
+      
+      {/* Smooth Resize Handle */}
+      {selected && !editing && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '-6px',
+            right: '-6px',
+            width: '12px',
+            height: '12px',
+            backgroundColor: 'rgb(var(--color-primary-500))',
+            border: '2px solid white',
+            borderRadius: '50%',
+            cursor: 'se-resize',
+            zIndex: 1001,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            transition: 'all 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+            transform: isResizing ? 'scale(1.2)' : 'scale(1)'
+          }}
+          onMouseDown={handleResizeMouseDown}
+        />
       )}
     </div>
   );
@@ -676,92 +948,83 @@ function AppContent() {
     return objects.filter(obj => obj.page === currentPage);
   }, [objects, currentPage]);
 
-  // Home Screen - Clean and Simple with Windows Logo Theme
+  // Home Screen - Simplistic Design with White Background
   if (currentView === 'picker') {
     return (
-      <Box className="flex-1 bg-gradient-to-br from-background-0 to-background-100 min-h-screen">
+      <Box className="flex-1 bg-white min-h-screen">
         <StatusBar style="auto" />
         
         <Center className="flex-1 px-6">
           <VStack space="2xl" className="items-center max-w-md w-full">
             
-            {/* Brand Header with Windows Colors */}
-            <VStack space="lg" className="items-center">
-              <Heading className="text-6xl font-bold text-light-blue-gradient animate-stagger-1">
-                QuickSign
-              </Heading>
-              <HStack space="md" className="items-center animate-float animate-stagger-2">
-                <Box className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg animate-glow-1">
-                  <HeroIcon path={icons.pencil} className="w-6 h-6 text-white" />
-                </Box>
-                <Box className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg animate-glow-2">
-                  <HeroIcon path={icons.documentText} className="w-6 h-6 text-white" />
-                </Box>
-                <Box className="p-3 bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg animate-glow-3">
-                  <HeroIcon path={icons.calendar} className="w-6 h-6 text-white" />
-                </Box>
-                <Box className="p-3 bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl shadow-lg animate-glow-4">
-                  <HeroIcon path={icons.checkCircle} className="w-6 h-6 text-white" />
-                </Box>
-              </HStack>
-            </VStack>
+            {/* Logo */}
+            <Box className="mb-4">
+              <img 
+                src="/logo.png" 
+                alt="QuickSign Logo" 
+                style={{ 
+                  width: '120px', 
+                  height: 'auto',
+                  filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.1))'
+                }} 
+              />
+            </Box>
 
-            {/* Upload Section with Windows Logo Styling */}
-            <VStack space="xl" className="items-center w-full">
+            {/* Upload Section - Icon as Button */}
+            <VStack space="lg" className="items-center w-full">
               
-              {/* Large Upload Zone with Windows Logo Border */}
-              <Box className="upload-zone-windows p-12 w-full animate-stagger-3">
-                <VStack space="md" className="items-center">
-                  <HeroIcon path={icons.upload} className="w-24 h-24 text-primary-500 animate-pulse-icon" />
-                  <Text className="text-typography-600 font-semibold text-lg">
-                    Drop your PDF here or click to browse
-                  </Text>
-                </VStack>
-              </Box>
-
-              {/* Windows Logo Animated Upload Button */}
-              <Button
-                size="xl"
-                className="btn-windows-animated w-full animate-stagger-4"
+              {/* Animated Upload Icon Button */}
+              <Pressable
                 onPress={handlePickDocument}
                 disabled={isLoading}
+                className="items-center"
               >
-                {isLoading ? (
-                  <HStack space="sm" className="items-center">
-                    <div className="spinner-fb" />
-                    <ButtonText className="text-white font-bold text-xl">
-                      Processing...
-                    </ButtonText>
-                  </HStack>
-                ) : (
-                  <HStack space="sm" className="items-center">
-                    <HeroIcon path={icons.documentText} className="w-7 h-7 text-white" />
-                    <ButtonText className="text-white font-bold text-xl">
-                      Choose PDF File
-                    </ButtonText>
-                  </HStack>
-                )}
-              </Button>
+                <Box className="upload-zone-windows p-16 w-full items-center">
+                  <VStack space="sm" className="items-center">
+                    {isLoading ? (
+                      <Spinner size="large" color="#0064EA" />
+                    ) : (
+                      <Box className="animate-pulse">
+                        <HeroIcon 
+                          path={icons.upload} 
+                          className="w-20 h-20 text-primary-500"
+                          style={{
+                            animation: 'windowsPulse 2s ease-in-out infinite'
+                          }}
+                        />
+                      </Box>
+                    )}
+                    <Text className="text-typography-600 font-medium text-lg mt-2">
+                      {isLoading ? 'Processing...' : 'PDF'}
+                    </Text>
+                  </VStack>
+                </Box>
+              </Pressable>
 
-              {/* Feature Highlights with Windows Colors */}
-              <HStack space="sm" className="items-center justify-center flex-wrap">
-                <Box className="badge-windows-red">
-                  <Text className="text-white font-bold text-xs">SIGN</Text>
-                </Box>
-                <Box className="badge-windows-orange">
-                  <Text className="text-white font-bold text-xs">TEXT</Text>
-                </Box>
-                <Box className="badge-windows-yellow">
-                  <Text className="text-white font-bold text-xs">DATE</Text>
-                </Box>
-                <Box className="badge-windows-green">
-                  <Text className="text-white font-bold text-xs">CHECK</Text>
-                </Box>
-              </HStack>
+              {/* Key Features */}
+              <VStack space="md" className="items-center w-full mt-6">
+                <HStack space="sm" className="items-center">
+                  <Box className="w-6 h-6 rounded-full bg-secondary-500 flex items-center justify-center">
+                    <HeroIcon path={icons.pencil} className="w-4 h-4 text-white" />
+                  </Box>
+                  <Text className="text-typography-700 font-medium">Sign, Text, Date & Check Fields</Text>
+                </HStack>
+                
+                <HStack space="sm" className="items-center">
+                  <Box className="w-6 h-6 rounded-full bg-tertiary-500 flex items-center justify-center">
+                    <HeroIcon path={icons.check} className="w-4 h-4 text-white" />
+                  </Box>
+                  <Text className="text-typography-700 font-medium">Offline Mode - No Cloud Required</Text>
+                </HStack>
+                
+                <HStack space="sm" className="items-center">
+                  <Box className="w-6 h-6 rounded-full bg-warning-500 flex items-center justify-center">
+                    <HeroIcon path={icons.check} className="w-4 h-4 text-white" />
+                  </Box>
+                  <Text className="text-typography-700 font-medium">Simple & Fast</Text>
+                </HStack>
+              </VStack>
 
-              <Text className="text-center text-typography-600 text-sm font-medium max-w-xs leading-relaxed">
-                Add signatures, text fields, dates, and checkboxes to your PDF documents
-              </Text>
             </VStack>
 
           </VStack>
@@ -770,39 +1033,31 @@ function AppContent() {
     );
   }
 
-  // Editor View
+  // Editor View - Updated to match simplistic style
   return (
-    <Box className="flex-1 bg-background-50">
+    <Box className="flex-1 bg-white">
       <StatusBar style="auto" />
       
       {/* Simple Header */}
-      <Box className="nav-fb border-b">
+      <Box className="bg-white border-b border-outline-200 shadow-sm">
         <Box className="px-4 py-3">
           <HStack className="items-center justify-between">
             <HStack space="md" className="items-center">
-              <Button
-                size="sm"
-                className="nav-fb-item"
+              <Pressable
                 onPress={() => setCurrentView('picker')}
+                className="flex-row items-center space-x-2 px-3 py-2 rounded-lg hover:bg-background-50"
               >
-                <HStack space="xs" className="items-center">
-                  <HeroIcon path={icons.chevronLeft} className="w-4 h-4" />
-                  <ButtonText className="font-semibold">Back</ButtonText>
-                </HStack>
-              </Button>
-              <VStack>
-                <Heading size="md" className="text-typography-800 font-bold">
-                  {selectedFile?.name || 'Document.pdf'}
-                </Heading>
-                <Box className="badge-windows-green">
-                  <Text className="text-white font-bold text-xs">Page {currentPage} of {totalPages}</Text>
-                </Box>
-              </VStack>
+                <HeroIcon path={icons.chevronLeft} className="w-4 h-4 text-typography-600" />
+                <Text className="font-semibold text-typography-700">Back</Text>
+              </Pressable>
+              <Heading size="md" className="text-typography-800 font-bold">
+                {selectedFile?.name || 'Document.pdf'}
+              </Heading>
             </HStack>
             
             {isRendering && (
               <HStack space="sm" className="items-center">
-                <div className="spinner-fb" />
+                <Spinner size="small" color="#0064EA" />
                 <Text className="text-typography-600 text-sm">Rendering...</Text>
               </HStack>
             )}
@@ -810,59 +1065,40 @@ function AppContent() {
         </Box>
       </Box>
 
-      {/* Tools with Windows Logo Colors */}
-      <Box className="nav-fb border-b">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <HStack space="sm" className="items-center px-4 py-2">
-            {tools.map((tool, index) => {
-              const colorClasses = [
-                'btn-windows-red',
-                'btn-windows-grey', 
-                'btn-windows-yellow',
-                'btn-windows-green'
-              ];
-              const animationClasses = [
-                'animate-glow-1',
-                'animate-glow-2',
-                'animate-glow-3',
-                'animate-glow-4'
-              ];
-              const colorClass = colorClasses[index % colorClasses.length];
-              const animationClass = animationClasses[index % animationClasses.length];
-              
-              return (
-                <Button
-                  key={tool.id}
-                  size="sm"
-                  className={`${colorClass} ${animationClass}`}
-                  onPress={tool.action}
-                >
-                  <HStack space="xs" className="items-center">
-                    <HeroIcon path={tool.icon} className="w-4 h-4 text-white" />
-                    <ButtonText className="text-white font-bold text-sm">{tool.label}</ButtonText>
-                  </HStack>
-                </Button>
-              );
-            })}
+      {/* Tools - Simplified and Centered */}
+      <Box className="bg-white border-b border-outline-200">
+        <Center className="py-3">
+          <HStack space="lg" className="items-center">
+            {tools.map((tool, index) => (
+              <Pressable
+                key={tool.id}
+                onPress={tool.action}
+                className="items-center"
+              >
+                <Box className="w-12 h-12 rounded-full bg-tertiary-500 flex items-center justify-center mb-1">
+                  <HeroIcon path={tool.icon} className="w-6 h-6 text-white" />
+                </Box>
+                <Text className="text-xs font-medium text-typography-600">{tool.label}</Text>
+              </Pressable>
+            ))}
             
-            <Box className="w-px h-6 bg-outline-300 mx-2" />
+            <Box className="w-px h-12 bg-outline-300 mx-2" />
             
-            <Button
-              size="sm"
-              className="nav-fb-item bg-error-50 hover:bg-error-100"
+            <Pressable
               onPress={clearAllObjects}
+              className="items-center"
             >
-              <HStack space="xs" className="items-center">
-                <HeroIcon path={icons.x} className="w-4 h-4 text-error-600" />
-                <ButtonText className="text-error-600 font-medium text-sm">Clear All</ButtonText>
-              </HStack>
-            </Button>
+              <Box className="w-12 h-12 rounded-full bg-error-500 flex items-center justify-center mb-1">
+                <HeroIcon path={icons.x} className="w-6 h-6 text-white" />
+              </Box>
+              <Text className="text-xs font-medium text-error-600">Clear</Text>
+            </Pressable>
           </HStack>
-        </ScrollView>
+        </Center>
       </Box>
 
       {/* PDF Viewer */}
-      <Box className="flex-1 bg-background-100">
+      <Box className="flex-1 bg-background-50">
         <ScrollView className="flex-1" contentContainerStyle={{ minHeight: '100%', justifyContent: 'center' }}>
           <Center className="p-6">
             <Box className="window-xp shadow-xp rounded-xp overflow-hidden">
@@ -874,9 +1110,12 @@ function AppContent() {
                       PDF Loading Error
                     </Heading>
                     <Text className="text-error-500 font-medium">{pdfError}</Text>
-                    <Button className="btn-xp mt-4" onPress={() => setCurrentView('picker')}>
-                      <ButtonText className="text-white font-semibold">Try Another File</ButtonText>
-                    </Button>
+                    <Pressable 
+                      onPress={() => setCurrentView('picker')}
+                      className="mt-4 px-6 py-3 bg-primary-500 rounded-lg"
+                    >
+                      <Text className="text-white font-semibold">Try Another File</Text>
+                    </Pressable>
                   </VStack>
                 </Box>
               ) : (
@@ -910,85 +1149,91 @@ function AppContent() {
         </ScrollView>
       </Box>
 
-      {/* Bottom Controls */}
-      <Box className="nav-fb border-t">
-        <Box className="px-4 py-3">
-          <HStack className="items-center justify-between">
-            <HStack space="sm" className="items-center">
-              <Button
-                size="sm"
-                className="btn-windows-red"
-                onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage <= 1}
-              >
-                <HStack space="xs" className="items-center">
-                  <HeroIcon path={icons.chevronLeft} className="w-4 h-4 text-white" />
-                  <ButtonText className="text-white font-bold">Previous</ButtonText>
-                </HStack>
-              </Button>
-              
-              <Box className="badge-windows-yellow px-4 py-2">
-                <Text className="text-white font-bold font-mono">{currentPage} / {totalPages}</Text>
+      {/* Bottom Controls - Simplified and Centered */}
+      <Box className="bg-white border-t border-outline-200">
+        <Center className="py-3">
+          <HStack space="lg" className="items-center">
+            <Pressable
+              onPress={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
+              className={`items-center ${currentPage <= 1 ? 'opacity-50' : ''}`}
+            >
+              <Box className="w-12 h-12 rounded-full bg-warning-500 flex items-center justify-center mb-1">
+                <HeroIcon path={icons.chevronLeft} className="w-6 h-6 text-white" />
               </Box>
-              
-              <Button
-                size="sm"
-                className="btn-windows-green"
-                onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage >= totalPages}
-              >
-                <HStack space="xs" className="items-center">
-                  <ButtonText className="text-white font-bold">Next</ButtonText>
-                  <HeroIcon path={icons.chevronRight} className="w-4 h-4 text-white" />
-                </HStack>
-              </Button>
-            </HStack>
+              <Text className="text-xs font-medium text-typography-600">Previous</Text>
+            </Pressable>
             
-            <HStack space="sm" className="items-center">
-              <Button
-                size="sm"
-                className="btn-windows-orange"
-                onPress={() => setScale(Math.max(0.25, scale - 0.25))}
-                disabled={scale <= 0.25}
-              >
-                <HeroIcon path={icons.zoomOut} className="w-4 h-4 text-white" />
-              </Button>
-              <Box className="badge-windows-red px-3 py-2">
-                <Text className="text-white font-bold font-mono text-xs" onPress={() => setScale(1.0)}>
+            <VStack className="items-center">
+              <Box className="bg-warning-500 px-4 py-2 rounded-full">
+                <Text className="text-white font-bold font-mono text-sm">{currentPage} / {totalPages}</Text>
+              </Box>
+            </VStack>
+            
+            <Pressable
+              onPress={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
+              className={`items-center ${currentPage >= totalPages ? 'opacity-50' : ''}`}
+            >
+              <Box className="w-12 h-12 rounded-full bg-warning-500 flex items-center justify-center mb-1">
+                <HeroIcon path={icons.chevronRight} className="w-6 h-6 text-white" />
+              </Box>
+              <Text className="text-xs font-medium text-typography-600">Next</Text>
+            </Pressable>
+            
+            <Box className="w-px h-12 bg-outline-300 mx-2" />
+            
+            <Pressable
+              onPress={() => setScale(Math.max(0.25, scale - 0.25))}
+              disabled={scale <= 0.25}
+              className={`items-center ${scale <= 0.25 ? 'opacity-50' : ''}`}
+            >
+              <Box className="w-12 h-12 rounded-full bg-primary-500 flex items-center justify-center mb-1">
+                <HeroIcon path={icons.zoomOut} className="w-6 h-6 text-white" />
+              </Box>
+              <Text className="text-xs font-medium text-typography-600">Zoom Out</Text>
+            </Pressable>
+            
+            <VStack className="items-center">
+              <Pressable onPress={() => setScale(1.0)} className="px-4 py-2 bg-primary-500 rounded-full">
+                <Text className="font-bold font-mono text-sm text-white">
                   {Math.round(scale * 100)}%
                 </Text>
+              </Pressable>
+            </VStack>
+            
+            <Pressable
+              onPress={() => setScale(Math.min(4, scale + 0.25))}
+              disabled={scale >= 4}
+              className={`items-center ${scale >= 4 ? 'opacity-50' : ''}`}
+            >
+              <Box className="w-12 h-12 rounded-full bg-primary-500 flex items-center justify-center mb-1">
+                <HeroIcon path={icons.zoomIn} className="w-6 h-6 text-white" />
               </Box>
-              <Button
-                size="sm"
-                className="btn-windows-orange"
-                onPress={() => setScale(Math.min(4, scale + 0.25))}
-                disabled={scale >= 4}
-              >
-                <HeroIcon path={icons.zoomIn} className="w-4 h-4 text-white" />
-              </Button>
-            </HStack>
+              <Text className="text-xs font-medium text-typography-600">Zoom In</Text>
+            </Pressable>
           </HStack>
-        </Box>
+        </Center>
       </Box>
 
-      {/* Signature Modal */}
+      {/* Signature Modal - Updated styling */}
       <Modal isOpen={showSignatureModal} onClose={() => setShowSignatureModal(false)}>
-        <ModalBackdrop className="bg-black/50 backdrop-blur-sm" />
-        <ModalContent className="window-xp m-4 max-w-lg shadow-xp">
-          <ModalHeader className="window-xp-header">
+        <ModalBackdrop className="bg-black/30 backdrop-blur-sm" />
+        <ModalContent className="bg-white rounded-3xl m-4 max-w-lg shadow-xl border-0">
+          <ModalHeader className="border-b border-outline-200 px-6 py-4">
             <HStack className="items-center justify-between w-full">
-              <Heading className="text-white font-semibold text-shadow-xp">
+              <Heading className="text-typography-800 font-bold text-lg">
                 Digital Signature
               </Heading>
-              <ModalCloseButton 
-                className="p-2 rounded-fb bg-error-500 shadow-fb"
+              <Pressable 
                 onPress={() => setShowSignatureModal(false)}
+                className="w-8 h-8 rounded-full bg-background-100 hover:bg-background-200 flex items-center justify-center"
               >
-                <HeroIcon path={icons.x} className="w-4 h-4 text-white" />
-              </ModalCloseButton>
+                <HeroIcon path={icons.x} className="w-4 h-4 text-typography-600" />
+              </Pressable>
             </HStack>
           </ModalHeader>
-          <ModalBody className="bg-background-0 p-6">
+          <ModalBody className="p-0">
             <SignaturePad 
               onSave={handleSaveSignature}
               onCancel={() => setShowSignatureModal(false)}
