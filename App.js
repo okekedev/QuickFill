@@ -39,9 +39,10 @@ import { StatusBar } from 'expo-status-bar';
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
-    /* Custom scrollbar styles */
+    /* Custom scrollbar styles for both vertical and horizontal */
     .pdf-scroll-container::-webkit-scrollbar {
       width: 12px;
+      height: 12px; /* Add height for horizontal scrollbar */
       background-color: #f1f1f1;
     }
     
@@ -60,10 +61,22 @@ if (typeof document !== 'undefined') {
       background-color: #555;
     }
     
+    /* Corner where scrollbars meet */
+    .pdf-scroll-container::-webkit-scrollbar-corner {
+      background-color: #f1f1f1;
+    }
+    
     /* Firefox scrollbar */
     .pdf-scroll-container {
       scrollbar-width: thin;
       scrollbar-color: #888 #f1f1f1;
+    }
+    
+    /* Ensure the container has proper scroll behavior */
+    .pdf-scroll-container {
+      overflow: auto !important;
+      width: 100%;
+      height: 100%;
     }
   `;
   document.head.appendChild(style);
@@ -111,7 +124,6 @@ import { Text } from './components/ui/text';
 import { Heading } from './components/ui/heading';
 import { Button, ButtonText } from './components/ui/button';
 import { Card } from './components/ui/card';
-import { ScrollView } from './components/ui/scroll-view';
 import { Modal, ModalBackdrop, ModalContent, ModalHeader, ModalCloseButton, ModalBody } from './components/ui/modal';
 import { Badge, BadgeText } from './components/ui/badge';
 import { Center } from './components/ui/center';
@@ -399,21 +411,30 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }, []);
 
-  const getMousePos = useCallback((e) => {
+  const getEventPos = useCallback((e) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
+    
+    // Handle both mouse and touch events
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    // Account for canvas scaling
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
     };
   }, []);
 
   const startDrawing = useCallback((e) => {
     e.preventDefault();
     setIsDrawing(true);
-    const pos = getMousePos(e);
+    const pos = getEventPos(e);
     setLastPos(pos);
-  }, [getMousePos]);
+  }, [getEventPos]);
 
   const draw = useCallback((e) => {
     if (!isDrawing) return;
@@ -421,7 +442,7 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    const currentPos = getMousePos(e);
+    const currentPos = getEventPos(e);
     
     ctx.beginPath();
     ctx.moveTo(lastPos.x, lastPos.y);
@@ -429,7 +450,7 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
     ctx.stroke();
     
     setLastPos(currentPos);
-  }, [isDrawing, lastPos, getMousePos]);
+  }, [isDrawing, lastPos, getEventPos]);
 
   const stopDrawing = useCallback(() => {
     setIsDrawing(false);
@@ -449,12 +470,21 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
 
   useEffect(() => {
     if (isDrawing) {
-      document.addEventListener('mousemove', draw);
-      document.addEventListener('mouseup', stopDrawing);
+      const handleMouseMove = (e) => draw(e);
+      const handleMouseUp = () => stopDrawing();
+      const handleTouchMove = (e) => draw(e);
+      const handleTouchEnd = () => stopDrawing();
+
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd);
       
       return () => {
-        document.removeEventListener('mousemove', draw);
-        document.removeEventListener('mouseup', stopDrawing);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
       };
     }
   }, [isDrawing, draw, stopDrawing]);
@@ -466,22 +496,24 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
           Draw Your Signature
         </Text>
         
-        {/* Canvas - Simple white box with border */}
+        {/* Canvas - Mobile-friendly */}
         <Box className="w-full border-2 border-outline-300 rounded-lg bg-white overflow-hidden">
           <canvas
             ref={canvasRef}
             onMouseDown={startDrawing}
+            onTouchStart={startDrawing}
             style={{
               cursor: 'crosshair',
               display: 'block',
               width: '100%',
-              height: '200px'
+              height: '200px',
+              touchAction: 'none' // Prevent scrolling on touch
             }}
           />
         </Box>
         
         <Text className="text-center text-typography-500 text-sm">
-          Click and drag to draw
+          Draw with your finger or mouse
         </Text>
         
         {/* Simple Button Row */}
@@ -513,7 +545,7 @@ const SignaturePad = React.memo(({ onSave, onCancel }) => {
 });
 
 // Editable Field Component
-const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, onSelect, onStartEdit, onFinishEdit }) => {
+const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, onSelect, onStartEdit, onFinishEdit, setShowSignatureModal, setSigningFieldId }) => {
   const [value, setValue] = useState(object.content || '');
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -650,7 +682,10 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
     if (isDoubleClick && !editing) {
       // Double click to edit
       if (object.type === 'signature') {
-        onStartEdit(object.id);
+        // For signatures, open the signature modal
+        setShowSignatureModal(true);
+        setSigningFieldId(object.id);
+        return;
       } else {
         onStartEdit(object.id);
       }
@@ -673,8 +708,15 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
         y: e.clientY - object.y * scale
       });
       
-      // Add smooth drag class
+      // Prevent scrolling during drag
       document.body.style.userSelect = 'none';
+      document.body.style.overflow = 'hidden';
+      
+      // Also prevent scrolling on the scroll container
+      const scrollContainer = document.querySelector('.pdf-scroll-container');
+      if (scrollContainer) {
+        scrollContainer.style.overflow = 'hidden';
+      }
     }
   }, [lastClickTime, editing, object.id, object.type, object.x, object.y, scale, onSelect, onStartEdit, handleContentChange, object.content]);
 
@@ -690,7 +732,15 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
       mouseY: e.clientY
     });
     
+    // Prevent scrolling during resize
     document.body.style.userSelect = 'none';
+    document.body.style.overflow = 'hidden';
+    
+    // Also prevent scrolling on the scroll container
+    const scrollContainer = document.querySelector('.pdf-scroll-container');
+    if (scrollContainer) {
+      scrollContainer.style.overflow = 'hidden';
+    }
   }, [object.width, object.height]);
 
   const handleMouseMove = useCallback((e) => {
@@ -699,44 +749,89 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
       
       // Use requestAnimationFrame for smooth updates
       requestAnimationFrame(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const canvasRect = canvas.getBoundingClientRect();
+        const maxX = (canvasRect.width / scale) - object.width;
+        const maxY = (canvasRect.height / scale) - object.height;
+        
         const newX = (e.clientX - dragStart.x) / scale;
         const newY = (e.clientY - dragStart.y) / scale;
         
         onUpdate(object.id, { 
-          x: Math.max(0, newX), 
-          y: Math.max(0, newY) 
+          x: Math.max(0, Math.min(maxX, newX)), 
+          y: Math.max(0, Math.min(maxY, newY))
         });
       });
     } else if (isResizing) {
       e.preventDefault();
       
       requestAnimationFrame(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        
+        const canvasRect = canvas.getBoundingClientRect();
+        const maxWidth = (canvasRect.width / scale) - object.x;
+        const maxHeight = (canvasRect.height / scale) - object.y;
+        
         const deltaX = e.clientX - resizeStart.mouseX;
         const deltaY = e.clientY - resizeStart.mouseY;
         
-        const newWidth = Math.max(30 / scale, resizeStart.width + deltaX / scale);
-        const newHeight = Math.max(20 / scale, resizeStart.height + deltaY / scale);
+        const newWidth = Math.max(30 / scale, Math.min(maxWidth, resizeStart.width + deltaX / scale));
+        const newHeight = Math.max(20 / scale, Math.min(maxHeight, resizeStart.height + deltaY / scale));
         
         onUpdate(object.id, { width: newWidth, height: newHeight });
       });
     }
-  }, [isDragging, isResizing, editing, dragStart, resizeStart, scale, object.id, onUpdate]);
+  }, [isDragging, isResizing, editing, dragStart, resizeStart, scale, object.id, object.x, object.y, object.width, object.height, onUpdate]);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
     setIsResizing(false);
+    
+    // Restore scrolling
     document.body.style.userSelect = '';
+    document.body.style.overflow = '';
+    
+    // Restore scrolling on the scroll container
+    const scrollContainer = document.querySelector('.pdf-scroll-container');
+    if (scrollContainer) {
+      scrollContainer.style.overflow = 'auto';
+    }
   }, []);
 
   // Add global mouse event listeners for dragging and resizing
   useEffect(() => {
     if (isDragging || isResizing) {
+      const handleTouchMove = (e) => {
+        if (e.touches && e.touches[0]) {
+          const touch = e.touches[0];
+          const mouseEvent = {
+            ...e,
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            preventDefault: e.preventDefault.bind(e),
+            stopPropagation: e.stopPropagation.bind(e)
+          };
+          handleMouseMove(mouseEvent);
+        }
+      };
+
+      const handleTouchEnd = () => {
+        handleMouseUp();
+      };
+
       document.addEventListener('mousemove', handleMouseMove, { passive: false });
       document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleTouchEnd);
       
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
       };
     }
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
@@ -770,6 +865,18 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
     <div
       style={fieldStyle}
       onMouseDown={handleMouseDown}
+      onTouchStart={(e) => {
+        // Convert touch to mouse event for mobile compatibility
+        const touch = e.touches[0];
+        const mouseEvent = {
+          ...e,
+          clientX: touch.clientX,
+          clientY: touch.clientY,
+          preventDefault: e.preventDefault.bind(e),
+          stopPropagation: e.stopPropagation.bind(e)
+        };
+        handleMouseDown(mouseEvent);
+      }}
     >
       {renderFieldContent()}
       
@@ -787,6 +894,18 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
             zIndex: 1001
           }}
           onMouseDown={handleResizeMouseDown}
+          onTouchStart={(e) => {
+            // Convert touch to mouse event for mobile compatibility
+            const touch = e.touches[0];
+            const mouseEvent = {
+              ...e,
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+              preventDefault: e.preventDefault.bind(e),
+              stopPropagation: e.stopPropagation.bind(e)
+            };
+            handleResizeMouseDown(mouseEvent);
+          }}
         />
       )}
     </div>
@@ -796,10 +915,12 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
 // Create reusable UI components
 const ToolButton = ({ tool, onPress, bgColor = "bg-tertiary-500" }) => (
   <Pressable onPress={onPress} className="items-center">
-    <Box className={`w-12 h-12 rounded-full ${bgColor} flex items-center justify-center mb-1`}>
-      <HeroIcon path={tool.icon} className="w-6 h-6 text-white" />
+    <Box className={`w-10 h-10 rounded-full ${bgColor} flex items-center justify-center mb-1`}>
+      <HeroIcon path={tool.icon} className="w-5 h-5 text-white" />
     </Box>
-    <Text className="text-xs font-medium text-typography-600">{tool.label}</Text>
+    <Text className="text-xs font-medium text-typography-600 text-center max-w-16">
+      {tool.label}
+    </Text>
   </Pressable>
 );
 
@@ -809,10 +930,10 @@ const NavButton = ({ icon, label, onPress, disabled, bgColor = "bg-warning-500" 
     disabled={disabled}
     className={`items-center ${disabled ? 'opacity-50' : ''}`}
   >
-    <Box className={`w-12 h-12 rounded-full ${bgColor} flex items-center justify-center mb-1`}>
-      <HeroIcon path={icon} className="w-6 h-6 text-white" />
+    <Box className={`w-10 h-10 rounded-full ${bgColor} flex items-center justify-center mb-1`}>
+      <HeroIcon path={icon} className="w-5 h-5 text-white" />
     </Box>
-    <Text className="text-xs font-medium text-typography-600">{label}</Text>
+    <Text className="text-xs font-medium text-typography-600 text-center max-w-16">{label}</Text>
   </Pressable>
 );
 
@@ -1032,7 +1153,7 @@ function AppContent() {
       };
       
       // Add form fields to the current page
-      objects.filter(obj => obj.page === currentPage).forEach(obj => {
+      for (const obj of objects.filter(obj => obj.page === currentPage)) {
         // Convert coordinates from canvas to PDF coordinate system
         const pdfX = obj.x;
         const pdfY = height - obj.y - obj.height; // PDF Y-axis is flipped
@@ -1075,17 +1196,30 @@ function AppContent() {
             color: rgb(0, 0, 0),
           });
         } else if (obj.type === 'signature' && obj.content && obj.content.startsWith('data:image')) {
-          // For signatures, we'd need to embed the image
-          // This is more complex and would require converting the signature to a format PDF-lib can handle
-          // For now, we'll add a placeholder text
-          page.drawText('[Signature]', {
-            x: pdfX + 4,
-            y: pdfY + obj.height * 0.5,
-            size: obj.fontSize || 12,
-            color: rgb(0.5, 0.5, 0.5),
-          });
+          try {
+            // Convert signature image to PNG and embed it
+            const signatureBytes = await fetch(obj.content).then(res => res.arrayBuffer());
+            const signatureImage = await pdfDoc.embedPng(signatureBytes);
+            
+            // Draw the signature image
+            page.drawImage(signatureImage, {
+              x: pdfX,
+              y: pdfY,
+              width: obj.width,
+              height: obj.height,
+            });
+          } catch (error) {
+            console.error('Failed to embed signature:', error);
+            // Fallback to text if image embedding fails
+            page.drawText('[Signature]', {
+              x: pdfX + 4,
+              y: pdfY + obj.height * 0.5,
+              size: obj.fontSize || 12,
+              color: rgb(0.5, 0.5, 0.5),
+            });
+          }
         }
-      });
+      }
       
       // Save the PDF
       const pdfBytes = await pdfDoc.save();
@@ -1133,28 +1267,14 @@ function AppContent() {
     return objects.filter(obj => obj.page === currentPage);
   }, [objects, currentPage]);
 
-  // Home Screen - With background image
+  // Home Screen
   if (currentView === 'picker') {
     return (
       <Box className="flex-1 bg-white min-h-screen">
         <StatusBar style="auto" />
         
-        {/* Background Image */}
-        <Box 
-          className="absolute inset-0 z-0"
-          style={{
-            backgroundImage: 'url("/background.jpg")',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            opacity: 0.5,
-            width: '100%',
-            height: '100%'
-          }}
-        />
-        
         {/* Content */}
-        <Center className="flex-1 px-6 relative z-10">
+        <Center className="flex-1 px-6">
           <VStack space="2xl" className="items-center max-w-md w-full">
             
             {/* Logo */}
@@ -1235,12 +1355,12 @@ function AppContent() {
 
   // Editor View
   return (
-    <Box className="flex-1 bg-white">
+    <Box className="flex-1 bg-white overflow-hidden">
       <StatusBar style="auto" />
       
       {/* Simple Header */}
       <Box className="bg-white border-b border-outline-200 shadow-sm">
-        <Box className="px-4 py-3">
+        <Box className="px-6 py-4">
           <HStack className="items-center justify-between">
             <HStack space="md" className="items-center">
               <Pressable
@@ -1281,13 +1401,14 @@ function AppContent() {
       {/* Tools - Collapsible */}
       {showTools && (
         <Box className="bg-white border-b border-outline-200">
-          <Center className="py-3">
-            <HStack space="lg" className="items-center">
+          <Center className="py-3 px-2">
+            {/* Mobile: Smaller buttons and spacing */}
+            <HStack space="sm" className="items-center flex-wrap justify-center">
               {tools.map((tool) => (
                 <ToolButton key={tool.id} tool={tool} onPress={tool.action} />
               ))}
               
-              <Box className="w-px h-12 bg-outline-300 mx-2" />
+              <Box className="w-px h-8 bg-outline-300 mx-1" />
               
               <ToolButton 
                 tool={{ icon: icons.x, label: 'Clear' }} 
@@ -1296,7 +1417,7 @@ function AppContent() {
               />
               
               <ToolButton 
-                tool={{ icon: icons.x, label: 'Delete One' }} 
+                tool={{ icon: icons.x, label: 'Delete' }} 
                 onPress={handleDeleteSelected}
                 bgColor="bg-warning-500"
               />
@@ -1317,19 +1438,29 @@ function AppContent() {
         </Center>
       </Box>
 
-      {/* PDF Viewer */}
-      <Box className="flex-1 bg-background-50 overflow-auto">
-        <ScrollView 
-          className="flex-1 pdf-scroll-container" 
-          contentContainerStyle={{ 
-            minHeight: '100%', 
-            justifyContent: 'flex-start',
-            paddingVertical: 24 
+      {/* PDF Viewer - FIXED SECTION */}
+      <Box className="flex-1 bg-background-50 overflow-hidden">
+        <div 
+          className="pdf-scroll-container"
+          style={{ 
+            width: '100%',
+            height: '100%',
+            overflow: 'auto'
           }}
-          showsVerticalScrollIndicator={true}
         >
-          <Center className="px-6">
-            <Box className="window-xp shadow-xp rounded-xp overflow-hidden">
+          <div style={{
+            minWidth: 'max-content',
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            padding: '24px',
+            boxSizing: 'border-box'
+          }}>
+            <Box className="window-xp shadow-xp rounded-xp overflow-hidden bg-white" style={{ 
+              minWidth: '600px',
+              maxWidth: 'fit-content',
+              position: 'relative'
+            }}>
               {pdfError ? (
                 <Box className="p-12 text-center">
                   <VStack space="md" className="items-center">
@@ -1361,8 +1492,7 @@ function AppContent() {
                       display: 'block',
                       width: '100%',
                       height: 'auto',
-                      minWidth: '600px', // Maintain minimum width to preserve aspect ratio
-                      maxWidth: 'none' // Allow horizontal scrolling if needed
+                      maxWidth: 'none'
                     }}
                   />
                   
@@ -1377,20 +1507,22 @@ function AppContent() {
                       onSelect={setSelectedId}
                       onStartEdit={() => setEditingId(object.id)}
                       onFinishEdit={() => setEditingId(null)}
+                      setShowSignatureModal={setShowSignatureModal}
+                      setSigningFieldId={setSigningFieldId}
                     />
                   ))}
                 </Box>
               )}
             </Box>
-          </Center>
-        </ScrollView>
+          </div>
+        </div>
       </Box>
 
       {/* Bottom Controls - Collapsible */}
       {showControls && (
         <Box className="bg-white border-t border-outline-200">
-          <Center className="py-3">
-            <HStack space="lg" className="items-center">
+          <Center className="py-3 px-2">
+            <HStack space="sm" className="items-center flex-wrap justify-center">
               <NavButton
                 icon={icons.chevronLeft}
                 label="Previous"
@@ -1399,8 +1531,8 @@ function AppContent() {
               />
               
               <VStack className="items-center">
-                <Box className="bg-warning-500 px-4 py-2 rounded-full">
-                  <Text className="text-white font-bold font-mono text-sm">{currentPage} / {totalPages}</Text>
+                <Box className="bg-warning-500 px-3 py-1.5 rounded-full">
+                  <Text className="text-white font-bold font-mono text-xs">{currentPage} / {totalPages}</Text>
                 </Box>
               </VStack>
               
@@ -1411,7 +1543,7 @@ function AppContent() {
                 disabled={currentPage >= totalPages}
               />
               
-              <Box className="w-px h-12 bg-outline-300 mx-2" />
+              <Box className="w-px h-8 bg-outline-300 mx-1" />
               
               <NavButton
                 icon={icons.zoomOut}
@@ -1422,8 +1554,8 @@ function AppContent() {
               />
               
               <VStack className="items-center">
-                <Pressable onPress={() => setScale(1.0)} className="px-4 py-2 bg-primary-500 rounded-full">
-                  <Text className="font-bold font-mono text-sm text-white">
+                <Pressable onPress={() => setScale(1.0)} className="px-3 py-1.5 bg-primary-500 rounded-full">
+                  <Text className="font-bold font-mono text-xs text-white">
                     {Math.round(scale * 100)}%
                   </Text>
                 </Pressable>
