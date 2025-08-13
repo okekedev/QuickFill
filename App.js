@@ -749,42 +749,28 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
       
       // Use requestAnimationFrame for smooth updates
       requestAnimationFrame(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        
-        const canvasRect = canvas.getBoundingClientRect();
-        const maxX = (canvasRect.width / scale) - object.width;
-        const maxY = (canvasRect.height / scale) - object.height;
-        
         const newX = (e.clientX - dragStart.x) / scale;
         const newY = (e.clientY - dragStart.y) / scale;
         
         onUpdate(object.id, { 
-          x: Math.max(0, Math.min(maxX, newX)), 
-          y: Math.max(0, Math.min(maxY, newY))
+          x: Math.max(0, newX), 
+          y: Math.max(0, newY) 
         });
       });
     } else if (isResizing) {
       e.preventDefault();
       
       requestAnimationFrame(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        
-        const canvasRect = canvas.getBoundingClientRect();
-        const maxWidth = (canvasRect.width / scale) - object.x;
-        const maxHeight = (canvasRect.height / scale) - object.y;
-        
         const deltaX = e.clientX - resizeStart.mouseX;
         const deltaY = e.clientY - resizeStart.mouseY;
         
-        const newWidth = Math.max(30 / scale, Math.min(maxWidth, resizeStart.width + deltaX / scale));
-        const newHeight = Math.max(20 / scale, Math.min(maxHeight, resizeStart.height + deltaY / scale));
+        const newWidth = Math.max(30 / scale, resizeStart.width + deltaX / scale);
+        const newHeight = Math.max(20 / scale, resizeStart.height + deltaY / scale);
         
         onUpdate(object.id, { width: newWidth, height: newHeight });
       });
     }
-  }, [isDragging, isResizing, editing, dragStart, resizeStart, scale, object.id, object.x, object.y, object.width, object.height, onUpdate]);
+  }, [isDragging, isResizing, editing, dragStart, resizeStart, scale, object.id, onUpdate]);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -1355,12 +1341,12 @@ function AppContent() {
 
   // Editor View
   return (
-    <Box className="flex-1 bg-white overflow-hidden">
+    <Box className="flex-1 bg-white">
       <StatusBar style="auto" />
       
       {/* Simple Header */}
       <Box className="bg-white border-b border-outline-200 shadow-sm">
-        <Box className="px-6 py-4">
+        <Box className="px-4 py-3">
           <HStack className="items-center justify-between">
             <HStack space="md" className="items-center">
               <Pressable
@@ -1439,82 +1425,77 @@ function AppContent() {
       </Box>
 
       {/* PDF Viewer - FIXED SECTION */}
-      <Box className="flex-1 bg-background-50 overflow-hidden">
+      <Box className="flex-1 bg-background-50">
         <div 
           className="pdf-scroll-container"
           style={{ 
             width: '100%',
             height: '100%',
-            overflow: 'auto'
-          }}
-        >
-          <div style={{
-            minWidth: 'max-content',
-            width: '100%',
+            overflow: 'auto',
             display: 'flex',
             justifyContent: 'center',
-            padding: '24px',
-            boxSizing: 'border-box'
+            alignItems: 'flex-start'
+          }}
+        >
+          <Box className="window-xp shadow-xp rounded-xp overflow-hidden bg-white" style={{ 
+            minWidth: '600px',
+            maxWidth: 'fit-content',
+            position: 'relative',
+            margin: '24px'
           }}>
-            <Box className="window-xp shadow-xp rounded-xp overflow-hidden bg-white" style={{ 
-              minWidth: '600px',
-              maxWidth: 'fit-content',
-              position: 'relative'
-            }}>
-              {pdfError ? (
-                <Box className="p-12 text-center">
-                  <VStack space="md" className="items-center">
-                    <HeroIcon path={icons.x} className="w-16 h-16 text-error-500" />
-                    <Heading className="text-error-600 text-lg font-semibold">
-                      PDF Loading Error
-                    </Heading>
-                    <Text className="text-error-500 font-medium">{pdfError}</Text>
-                    <Pressable 
-                      onPress={() => setCurrentView('picker')}
-                      className="mt-4 px-6 py-3 bg-primary-500 rounded-lg"
-                    >
-                      <Text className="text-white font-semibold">Try Another File</Text>
-                    </Pressable>
-                  </VStack>
-                </Box>
-              ) : (
-                <Box className="relative bg-white">
-                  <canvas
-                    ref={canvasRef}
-                    onClick={(e) => {
-                      // Click on canvas background deselects all elements
-                      if (e.target === canvasRef.current) {
-                        setSelectedId(null);
-                        setEditingId(null);
-                      }
-                    }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      height: 'auto',
-                      maxWidth: 'none'
-                    }}
+            {pdfError ? (
+              <Box className="p-12 text-center">
+                <VStack space="md" className="items-center">
+                  <HeroIcon path={icons.x} className="w-16 h-16 text-error-500" />
+                  <Heading className="text-error-600 text-lg font-semibold">
+                    PDF Loading Error
+                  </Heading>
+                  <Text className="text-error-500 font-medium">{pdfError}</Text>
+                  <Pressable 
+                    onPress={() => setCurrentView('picker')}
+                    className="mt-4 px-6 py-3 bg-primary-500 rounded-lg"
+                  >
+                    <Text className="text-white font-semibold">Try Another File</Text>
+                  </Pressable>
+                </VStack>
+              </Box>
+            ) : (
+              <Box className="relative bg-white">
+                <canvas
+                  ref={canvasRef}
+                  onClick={(e) => {
+                    // Click on canvas background deselects all elements
+                    if (e.target === canvasRef.current) {
+                      setSelectedId(null);
+                      setEditingId(null);
+                    }
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    height: 'auto',
+                    maxWidth: 'none'
+                  }}
+                />
+                
+                {getCurrentPageFields().map((object) => (
+                  <EditableField
+                    key={object.id}
+                    object={object}
+                    scale={scale}
+                    selected={selectedId === object.id}
+                    editing={editingId === object.id}
+                    onUpdate={updateObject}
+                    onSelect={setSelectedId}
+                    onStartEdit={() => setEditingId(object.id)}
+                    onFinishEdit={() => setEditingId(null)}
+                    setShowSignatureModal={setShowSignatureModal}
+                    setSigningFieldId={setSigningFieldId}
                   />
-                  
-                  {getCurrentPageFields().map((object) => (
-                    <EditableField
-                      key={object.id}
-                      object={object}
-                      scale={scale}
-                      selected={selectedId === object.id}
-                      editing={editingId === object.id}
-                      onUpdate={updateObject}
-                      onSelect={setSelectedId}
-                      onStartEdit={() => setEditingId(object.id)}
-                      onFinishEdit={() => setEditingId(null)}
-                      setShowSignatureModal={setShowSignatureModal}
-                      setSigningFieldId={setSigningFieldId}
-                    />
-                  ))}
-                </Box>
-              )}
-            </Box>
-          </div>
+                ))}
+              </Box>
+            )}
+          </Box>
         </div>
       </Box>
 
