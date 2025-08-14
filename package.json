@@ -4,72 +4,34 @@
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
-    "android": "DARK_MODE=media expo start --android",
-    "ios": "DARK_MODE=media expo start --ios",
-    "web": "DARK_MODE=media expo start --web"
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "dev-client": "expo start --dev-client"
   },
   "dependencies": {
-    "@expo/html-elements": "^0.4.2",
-    "@expo/metro-runtime": "~4.0.1",
-    "@gluestack-ui/accordion": "^1.0.14",
-    "@gluestack-ui/actionsheet": "^0.2.53",
-    "@gluestack-ui/alert": "^0.1.16",
-    "@gluestack-ui/alert-dialog": "^0.1.38",
-    "@gluestack-ui/avatar": "^0.1.18",
-    "@gluestack-ui/button": "^1.0.14",
-    "@gluestack-ui/checkbox": "^0.1.39",
-    "@gluestack-ui/divider": "^0.1.10",
-    "@gluestack-ui/fab": "^0.1.28",
-    "@gluestack-ui/form-control": "^0.1.19",
-    "@gluestack-ui/icon": "^0.1.27",
-    "@gluestack-ui/image": "^0.1.17",
-    "@gluestack-ui/input": "^0.1.38",
-    "@gluestack-ui/link": "^0.1.29",
-    "@gluestack-ui/menu": "^0.2.43",
-    "@gluestack-ui/modal": "^0.1.41",
-    "@gluestack-ui/nativewind-utils": "^1.0.26",
-    "@gluestack-ui/overlay": "^0.1.22",
-    "@gluestack-ui/popover": "^0.1.49",
-    "@gluestack-ui/pressable": "^0.1.23",
-    "@gluestack-ui/progress": "^0.1.18",
-    "@gluestack-ui/radio": "^0.1.40",
-    "@gluestack-ui/select": "^0.1.31",
-    "@gluestack-ui/slider": "^0.1.32",
-    "@gluestack-ui/spinner": "^0.1.15",
-    "@gluestack-ui/switch": "^0.1.29",
-    "@gluestack-ui/textarea": "^0.1.25",
-    "@gluestack-ui/toast": "^1.0.9",
-    "@gluestack-ui/tooltip": "^0.1.44",
-    "@legendapp/motion": "^2.4.0",
-    "babel-plugin-module-resolver": "^5.0.2",
+    "@expo/metro-runtime": "~5.0.4",
     "expo": "~53.0.0",
     "expo-document-picker": "~13.0.3",
     "expo-file-system": "~18.0.12",
+    "expo-sharing": "~12.0.1",
     "expo-status-bar": "~2.0.1",
-    "nativewind": "^4.1.23",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "react-native": "0.76.9",
-    "react-native-css-interop": "^0.1.22",
-    "react-native-reanimated": "~3.16.1",
-    "react-native-safe-area-context": "^5.6.0",
-    "react-native-svg": "^15.2.0",
-    "react-native-web": "~0.19.13",
-    "react-native-webview": "13.12.5",
-    "rn-pdf-reader-js": "^4.1.1",
-    "tailwindcss": "^3.4.17"
+    "pdf-lib": "^1.17.1",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "react-native": "0.78.0",
+    "react-native-svg": "15.9.0",
+    "react-native-web": "~0.20.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.0",
-    "@types/react": "~18.3.12",
-    "jscodeshift": "^0.15.2"
+    "@babel/core": "^7.28.0"
   },
   "expo": {
     "name": "Quick Fill",
-    "slug": "Quick Fill & Sign",
+    "slug": "quick-fill-sign",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/icon.png",
+    "icon": "./public/icon.png",
     "userInterfaceStyle": "automatic",
     "platforms": [
       "ios",
@@ -78,7 +40,7 @@
     ],
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./public/favicon.png"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -89,7 +51,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./public/adaptive-icon.png",
         "backgroundColor": "#1e3a8a"
       },
       "package": "us.sundai.quickfill"
