@@ -12,6 +12,7 @@ export const Button = ({
   textStyle,
   children,
   icon,
+  pointerEvents,
   ...props 
 }) => {
   const getButtonStyle = () => {
@@ -48,21 +49,27 @@ export const Button = ({
       size="small" 
     />
   ) : (
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-      {icon && <View style={{ marginRight: 8 }}>{icon}</View>}
-      {children || (
-        <Text style={[...getTextStyle(), disabled && components.buttonTextDisabled, textStyle]}>
+    <View style={{ 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      flex: 1
+    }}>
+      {icon && <View style={{ marginRight: title && title.trim() ? 8 : 0 }}>{icon}</View>}
+      {children || (title && title.trim() && (
+        <Text style={[getTextStyle(), disabled && components.buttonTextDisabled, textStyle]}>
           {title}
         </Text>
-      )}
+      ))}
     </View>
   );
 
   return (
     <TouchableOpacity
       style={[
-        ...getButtonStyle(),
+        getButtonStyle(),
         disabled && components.buttonDisabled,
+        pointerEvents && { pointerEvents },
         style
       ]}
       onPress={onPress}

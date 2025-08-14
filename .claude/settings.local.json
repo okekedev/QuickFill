@@ -6,6 +6,7 @@
       "Bash(npx expo start:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "defaultMode": "acceptEdits"
   }
 }

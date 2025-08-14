@@ -18,8 +18,8 @@ export const SignaturePad = React.memo(({ onSave, onCancel }) => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
-    canvas.width = 400;
-    canvas.height = 200;
+    canvas.width = 360;
+    canvas.height = 150;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }, []);
 

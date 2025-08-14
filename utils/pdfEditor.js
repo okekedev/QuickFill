@@ -138,7 +138,7 @@ export function usePDFEditor(pdfBase64) {
     const id = `${type}_${Date.now()}`;
     
     const fieldConfigs = {
-      text: { width: 200, height: 60, content: '', fontSize: 11 },
+      text: { width: 150, height: 24, content: '', fontSize: 11 },
       date: { width: 100, height: 24, content: new Date().toLocaleDateString(), fontSize: 11 },
       checkbox: { width: 20, height: 20, content: true, fontSize: 16 }
     };

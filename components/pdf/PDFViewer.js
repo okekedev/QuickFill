@@ -1,36 +1,45 @@
+// components/pdf/PDFViewer.js
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { EditableField } from './EditableField';
 import { usePDFEditor } from '../../utils/pdfEditor';
 import { readFileAsBase64 } from '../../utils/fileHelpers';
 import { components, colors, layout } from '../../styles';
+import { Button } from '../ui/Button';
 
 export const PDFViewer = ({ 
   pdfFile,
+  pdfBase64: externalPdfBase64,
+  objects: externalObjects,
   onFieldUpdate,
   onFieldSelect,
   onFieldEdit,
   onFieldDelete,
   selectedFieldId,
   editingFieldId,
+  scale: externalScale,
+  setScale: externalSetScale,
+  currentPage: externalCurrentPage,
+  setCurrentPage: externalSetCurrentPage,
+  totalPages: externalTotalPages,
   style,
   ...props 
 }) => {
-  const [pdfBase64, setPdfBase64] = useState(null);
+  const [pdfBase64, setPdfBase64] = useState(externalPdfBase64);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // PDF Editor Hook
+  // PDF Editor Hook - always create it for canvas rendering
   const {
     canvasRef,
     pdfLoaded,
     pdfError,
-    currentPage,
-    setCurrentPage,
-    totalPages,
-    scale,
-    setScale,
-    objects,
+    currentPage: internalCurrentPage,
+    setCurrentPage: internalSetCurrentPage,
+    totalPages: internalTotalPages,
+    scale: internalScale,
+    setScale: internalSetScale,
+    objects: internalObjects,
     selectedId,
     setSelectedId,
     editingId,
@@ -40,8 +49,21 @@ export const PDFViewer = ({
     getCurrentPageFields
   } = usePDFEditor(pdfBase64);
 
+  // Use external props if provided, otherwise use internal state
+  const objects = externalObjects || internalObjects;
+  const currentPage = externalCurrentPage !== undefined ? externalCurrentPage : internalCurrentPage;
+  const setCurrentPage = externalSetCurrentPage || internalSetCurrentPage;
+  const totalPages = externalTotalPages !== undefined ? externalTotalPages : internalTotalPages;
+  const scale = externalScale !== undefined ? externalScale : internalScale;
+  const setScale = externalSetScale || internalSetScale;
+
   // Load PDF from file
   useEffect(() => {
+    if (externalPdfBase64) {
+      setPdfBase64(externalPdfBase64);
+      return;
+    }
+
     if (!pdfFile) {
       setPdfBase64(null);
       return;
@@ -63,7 +85,7 @@ export const PDFViewer = ({
     };
 
     loadPDF();
-  }, [pdfFile]);
+  }, [pdfFile, externalPdfBase64]);
 
   // Sync external field selection with internal state
   useEffect(() => {
@@ -78,6 +100,20 @@ export const PDFViewer = ({
     }
   }, [editingFieldId, editingId, setEditingId]);
 
+  // Sync external page changes to internal state
+  useEffect(() => {
+    if (externalCurrentPage !== undefined && externalCurrentPage !== internalCurrentPage) {
+      internalSetCurrentPage(externalCurrentPage);
+    }
+  }, [externalCurrentPage, internalCurrentPage, internalSetCurrentPage]);
+
+  // Sync external scale changes to internal state  
+  useEffect(() => {
+    if (externalScale !== undefined && externalScale !== internalScale) {
+      internalSetScale(externalScale);
+    }
+  }, [externalScale, internalScale, internalSetScale]);
+
   const handleCanvasClick = (e) => {
     // Deselect fields when clicking on empty PDF area
     if (e.target === canvasRef.current) {
@@ -85,20 +121,36 @@ export const PDFViewer = ({
     }
   };
 
+  const handleContainerClick = (e) => {
+    // Deselect fields when clicking outside the PDF canvas
+    if (!canvasRef.current?.contains(e.target)) {
+      onFieldSelect?.(null);
+      // Also exit editing mode
+      onFieldEdit?.(null);
+    }
+  };
+
   const handleFieldUpdate = (fieldId, updates) => {
-    updateObject(fieldId, updates);
-    onFieldUpdate?.(fieldId, updates);
+    if (onFieldUpdate) {
+      onFieldUpdate(fieldId, updates);
+    } else {
+      updateObject(fieldId, updates);
+    }
   };
 
   const handleFieldDelete = (fieldId) => {
-    deleteObject(fieldId);
-    onFieldDelete?.(fieldId);
+    if (onFieldDelete) {
+      onFieldDelete(fieldId);
+    } else {
+      deleteObject(fieldId);
+    }
   };
 
-  const currentFields = getCurrentPageFields();
+  // Get fields for current page only
+  const currentFields = objects.filter(obj => obj.page === currentPage);
 
   return (
-    <View style={[{ flex: 1 }, style]} {...props}>
+    <View style={[{ flex: 1 }, style]} onClick={handleContainerClick} {...props}>
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={{ 
@@ -109,6 +161,10 @@ export const PDFViewer = ({
         }}
         showsVerticalScrollIndicator={true}
         showsHorizontalScrollIndicator={true}
+        scrollEventThrottle={16}
+        bounces={false}
+        horizontal={false}
+        directionalLockEnabled={false}
       >
         {loading && (
           <View style={[layout.center, { padding: 50 }]}>
@@ -126,10 +182,10 @@ export const PDFViewer = ({
           </View>
         )}
         
-        {!pdfFile && !loading && (
+        {!pdfBase64 && !loading && (
           <View style={[layout.center, { padding: 50 }]}>
             <Text style={[components.bodyText, { textAlign: 'center', color: colors.text.secondary }]}>
-              No PDF selected
+              No PDF loaded
             </Text>
           </View>
         )}
@@ -146,7 +202,6 @@ export const PDFViewer = ({
             shadowRadius: 12,
             elevation: 8,
             padding: 20,
-            maxWidth: '90%',
             alignSelf: 'center'
           }}>
             <canvas
@@ -154,7 +209,6 @@ export const PDFViewer = ({
               onClick={handleCanvasClick}
               style={{
                 display: 'block',
-                maxWidth: '100%',
                 height: 'auto',
                 border: '2px solid #f1f5f9',
                 borderRadius: 8,
@@ -164,109 +218,37 @@ export const PDFViewer = ({
             />
             
             {/* PDF Fields Overlay */}
-            {currentFields.map((field) => (
-              <EditableField
-                key={field.id}
-                field={field}
-                scale={scale}
-                isSelected={selectedId === field.id}
-                isEditing={editingId === field.id}
-                onSelect={onFieldSelect}
-                onUpdate={handleFieldUpdate}
-                onEditStart={(id) => onFieldEdit?.(id)}
-                onEditEnd={() => onFieldEdit?.(null)}
-                onDelete={handleFieldDelete}
-              />
-            ))}
+            <View style={{
+              position: 'absolute',
+              top: 20,
+              left: 20,
+              right: 20,
+              bottom: 20,
+              pointerEvents: 'box-none'
+            }}>
+              {currentFields.map((field) => {
+                return (
+                  <EditableField
+                    key={field.id}
+                    field={field}
+                    scale={scale}
+                    isSelected={selectedId === field.id}
+                    isEditing={editingId === field.id}
+                    onSelect={onFieldSelect}
+                    onUpdate={handleFieldUpdate}
+                    onEditStart={(id) => onFieldEdit?.(id)}
+                    onEditEnd={() => onFieldEdit?.(null)}
+                    onDelete={handleFieldDelete}
+                    style={{ pointerEvents: 'auto' }}
+                  />
+                );
+              })}
+            </View>
+            
           </View>
         )}
+        
       </ScrollView>
-      
-      {/* Compact Navigation and Zoom Controls */}
-      {pdfLoaded && (
-        <View style={[
-          layout.row, 
-          layout.spaceBetween, 
-          layout.center, 
-          { 
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            backgroundColor: colors.gray[50],
-            borderTopWidth: 1, 
-            borderTopColor: colors.gray[200]
-          }
-        ]}>
-          {/* Page Navigation */}
-          <View style={[layout.row, layout.center]}>
-            <Text 
-              style={[
-                components.caption,
-                {
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  color: currentPage === 1 ? colors.gray[400] : colors.primary[500]
-                }
-              ]}
-              onPress={currentPage > 1 ? () => setCurrentPage(currentPage - 1) : undefined}
-            >
-              ←
-            </Text>
-            
-            <Text style={[components.caption, { marginHorizontal: 12, color: colors.text.secondary }]}>
-              {currentPage} / {totalPages}
-            </Text>
-            
-            <Text 
-              style={[
-                components.caption,
-                {
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  color: currentPage === totalPages ? colors.gray[400] : colors.primary[500]
-                }
-              ]}
-              onPress={currentPage < totalPages ? () => setCurrentPage(currentPage + 1) : undefined}
-            >
-              →
-            </Text>
-          </View>
-
-          {/* Zoom Controls */}
-          <View style={[layout.row, layout.center]}>
-            <Text 
-              style={[
-                components.caption,
-                {
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  color: scale <= 0.5 ? colors.gray[400] : colors.primary[500]
-                }
-              ]}
-              onPress={scale > 0.5 ? () => setScale(Math.max(0.5, scale - 0.2)) : undefined}
-            >
-              -
-            </Text>
-            
-            <Text style={[components.caption, { marginHorizontal: 12, color: colors.text.secondary, minWidth: 40, textAlign: 'center' }]}>
-              {Math.round(scale * 100)}%
-            </Text>
-            
-            <Text 
-              style={[
-                components.caption,
-                {
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  color: scale >= 3 ? colors.gray[400] : colors.primary[500]
-                }
-              ]}
-              onPress={scale < 3 ? () => setScale(Math.min(3, scale + 0.2)) : undefined}
-            >
-              +
-            </Text>
-          </View>
-        </View>
-      )}
     </View>
   );
 };

@@ -1,3 +1,4 @@
+// components/pdf/EditableField.js
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { components, colors, layout } from '../../styles';
@@ -21,6 +22,7 @@ export const EditableField = React.memo(({
   const [startPosition, setStartPosition] = useState({ x: 0, y: 0 });
   const [startSize, setStartSize] = useState({ width: 0, height: 0 });
   const [tempValue, setTempValue] = useState(field.content || '');
+  const [wasDragged, setWasDragged] = useState(false);
 
   // Update temp value when field content changes
   useEffect(() => {
@@ -35,42 +37,67 @@ export const EditableField = React.memo(({
       };
     }
     return {
-      x: e.clientX,
-      y: e.clientY
+      x: e.clientX || e.pageX,
+      y: e.clientY || e.pageY
     };
   }, []);
 
   const handleFieldPress = useCallback((e) => {
-    e.stopPropagation();
-    onSelect?.(field.id);
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     
-    // Double tap/click to edit
-    if (isSelected && !isEditing) {
+    // If we just finished dragging, don't process clicks
+    if (wasDragged) {
+      setWasDragged(false);
+      return;
+    }
+    
+    // If already editing, do nothing
+    if (isEditing) {
+      return;
+    }
+    
+    // If selected and not editing, check for double-click to start editing
+    if (isSelected) {
       const now = Date.now();
-      const lastTap = fieldRef.current?.lastTap || 0;
-      if (now - lastTap < 300) {
+      const lastClick = fieldRef.current?.lastClick || 0;
+      if (now - lastClick < 300) {
+        // Double-click detected - start editing
         onEditStart?.(field.id);
       }
-      fieldRef.current.lastTap = now;
+      if (fieldRef.current) {
+        fieldRef.current.lastClick = now;
+      }
+      return;
     }
-  }, [field.id, isSelected, isEditing, onSelect, onEditStart]);
+    
+    // If not selected, select it
+    onSelect?.(field.id);
+  }, [field.id, isSelected, isEditing, onSelect, onEditStart, wasDragged]);
 
   const handleDragStart = useCallback((e) => {
     if (isEditing) return;
-    e.preventDefault();
-    e.stopPropagation();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
     const pos = getEventPos(e);
     setIsDragging(true);
     setDragStart(pos);
     setStartPosition({ x: field.x, y: field.y });
+    setWasDragged(false); // Reset drag flag
     onSelect?.(field.id);
   }, [field.x, field.y, field.id, isEditing, getEventPos, onSelect]);
 
   const handleResizeStart = useCallback((e) => {
     if (isEditing) return;
-    e.preventDefault();
-    e.stopPropagation();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
     const pos = getEventPos(e);
     setIsResizing(true);
@@ -81,11 +108,18 @@ export const EditableField = React.memo(({
 
   const handleMouseMove = useCallback((e) => {
     if (!isDragging && !isResizing) return;
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
     
     const pos = getEventPos(e);
     const deltaX = (pos.x - dragStart.x) / scale;
     const deltaY = (pos.y - dragStart.y) / scale;
+    
+    // If we've moved more than a few pixels, mark as dragged
+    if ((Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3)) {
+      setWasDragged(true);
+    }
     
     if (isDragging) {
       const newX = Math.max(0, startPosition.x + deltaX);
@@ -125,63 +159,108 @@ export const EditableField = React.memo(({
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
 
   const handleTextSubmit = useCallback(() => {
-    onUpdate?.(field.id, { content: tempValue });
-    onEditEnd?.(field.id);
-  }, [field.id, tempValue, onUpdate, onEditEnd]);
+    // Calculate new height based on content (in unscaled coordinates)
+    const lines = tempValue.split('\n').length;
+    const lineHeight = (field.fontSize || 11) * 1.2;
+    const newHeight = Math.max(24, lines * lineHeight + 8); // 8px for padding
+    
+    onUpdate?.(field.id, { 
+      content: tempValue, 
+      height: newHeight 
+    });
+    onEditEnd?.(null);
+  }, [field.id, tempValue, onUpdate, onEditEnd, field.fontSize]);
 
   const handleTextCancel = useCallback(() => {
     setTempValue(field.content || '');
-    onEditEnd?.(field.id);
-  }, [field.id, field.content, onEditEnd]);
+    onEditEnd?.(null);
+  }, [field.content, onEditEnd]);
 
-  const handleCheckboxToggle = useCallback(() => {
-    onUpdate?.(field.id, { content: !field.content });
+  const handleCheckboxToggle = useCallback((e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    
+    // Double click detection for checkbox
+    const now = Date.now();
+    const lastClick = fieldRef.current?.lastCheckboxClick || 0;
+    if (now - lastClick < 300) {
+      onUpdate?.(field.id, { content: !field.content });
+    }
+    if (fieldRef.current) {
+      fieldRef.current.lastCheckboxClick = now;
+    }
   }, [field.id, field.content, onUpdate]);
 
   const renderFieldContent = () => {
     if (isEditing && field.type === 'text') {
       return (
-        <View style={{ flex: 1 }}>
-          <TextInput
-            value={tempValue}
-            onChangeText={setTempValue}
-            onBlur={handleTextSubmit}
-            onSubmitEditing={handleTextSubmit}
-            style={[
-              components.input,
-              {
-                fontSize: Math.max(8, field.fontSize * scale),
-                color: field.color || '#000000',
-                padding: 4,
-                margin: 0,
-                minHeight: 'auto',
-                height: '100%',
-                textAlignVertical: 'center'
-              }
-            ]}
-            multiline={field.height > 30}
-            autoFocus
-          />
-        </View>
+        <TextInput
+          value={tempValue}
+          onChangeText={(text) => {
+            setTempValue(text);
+            // Auto-expand height while typing
+            const lines = text.split('\n').length;
+            const lineHeight = (field.fontSize || 11) * 1.2;
+            const newHeight = Math.max(24, lines * lineHeight + 8);
+            if (newHeight !== field.height) {
+              onUpdate?.(field.id, { height: newHeight });
+            }
+          }}
+          onKeyPress={(e) => {
+            if (e.key === 'Escape') {
+              handleTextCancel();
+            } else if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleTextSubmit();
+            }
+          }}
+          onBlur={handleTextSubmit}
+          className="hide-scrollbars"
+          style={{
+            fontSize: Math.max(8, (field.fontSize || 11) * scale),
+            color: field.color || '#000000',
+            padding: 4,
+            margin: 0,
+            border: 'none',
+            outline: 'none',
+            backgroundColor: 'transparent',
+            width: '100%',
+            height: '100%',
+            resize: 'none',
+            wordWrap: 'break-word',
+            whiteSpace: 'pre-wrap',
+            overflow: 'hidden',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }}
+          multiline={true}
+          autoFocus
+        />
       );
     }
 
     switch (field.type) {
       case 'text':
         return (
-          <Text 
-            style={[
-              components.pdfFieldText,
-              {
-                fontSize: Math.max(8, field.fontSize * scale),
-                color: field.color || '#000000',
-                textAlign: 'left'
-              }
-            ]}
-            numberOfLines={field.height > 30 ? undefined : 1}
+          <div
+            style={{
+              fontSize: Math.max(8, (field.fontSize || 11) * scale),
+              color: field.color || '#000000',
+              padding: 4,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: field.content ? 'flex-start' : 'center',
+              justifyContent: 'flex-start',
+              wordWrap: 'break-word',
+              whiteSpace: 'pre-wrap',
+              overflow: 'hidden'
+            }}
           >
-            {field.content || 'Text Field'}
-          </Text>
+{field.content || 'Text Field'}
+          </div>
         );
         
       case 'signature':
@@ -191,12 +270,18 @@ export const EditableField = React.memo(({
             style={{ 
               width: '100%', 
               height: '100%', 
-              objectFit: 'contain' 
+              objectFit: 'contain',
+              pointerEvents: 'none'
             }} 
             alt="Signature"
           />
         ) : (
-          <Text style={[components.pdfFieldText, { fontSize: Math.max(8, 10 * scale) }]}>
+          <Text style={{
+            fontSize: Math.max(8, 10 * scale),
+            color: '#666',
+            padding: 4,
+            textAlign: 'center'
+          }}>
             Signature
           </Text>
         );
@@ -204,13 +289,15 @@ export const EditableField = React.memo(({
       case 'date':
         return (
           <Text 
-            style={[
-              components.pdfFieldText,
-              { 
-                fontSize: Math.max(8, field.fontSize * scale),
-                color: field.color || '#000000' 
-              }
-            ]}
+            style={{
+              fontSize: Math.max(8, (field.fontSize || 12) * scale),
+              color: field.color || '#000000',
+              padding: 4,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center'
+            }}
           >
             {field.content || new Date().toLocaleDateString()}
           </Text>
@@ -218,35 +305,39 @@ export const EditableField = React.memo(({
         
       case 'checkbox':
         return (
-          <TouchableOpacity 
-            onPress={handleCheckboxToggle}
-            style={[
-              {
-                width: '100%',
-                height: '100%',
-                justifyContent: 'center',
-                alignItems: 'center',
-                borderWidth: 1,
-                borderColor: field.color || '#000000',
-                backgroundColor: field.content ? field.color || '#000000' : 'transparent'
-              }
-            ]}
+          <div
+            onClick={handleCheckboxToggle}
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              border: 'none',
+              backgroundColor: 'transparent',
+              cursor: 'pointer'
+            }}
           >
             {field.content && (
-              <Text style={{ 
-                color: 'white', 
-                fontSize: Math.max(8, 12 * scale),
-                fontWeight: 'bold' 
+              <span style={{ 
+                color: '#000000', 
+                fontSize: 11,
+                fontWeight: 'bold',
+                userSelect: 'none'
               }}>
-                ✓
-              </Text>
+                X
+              </span>
             )}
-          </TouchableOpacity>
+          </div>
         );
         
       default:
         return (
-          <Text style={[components.pdfFieldText, { fontSize: Math.max(8, 10 * scale) }]}>
+          <Text style={{
+            fontSize: Math.max(8, 10 * scale),
+            color: '#666',
+            padding: 4
+          }}>
             {field.type}
           </Text>
         );
@@ -259,33 +350,29 @@ export const EditableField = React.memo(({
     top: field.y * scale,
     width: field.width * scale,
     height: field.height * scale,
-    borderWidth: isSelected ? 2 : 1,
-    borderColor: isSelected ? colors.primary[500] : 'rgba(0, 0, 0, 0.3)',
-    borderStyle: isEditing ? 'solid' : 'dashed',
-    backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.1)' : 'rgba(255, 255, 255, 0.8)',
+    border: isSelected ? `2px solid ${colors.primary[500]}` : '2px solid transparent',
+    backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
     cursor: isDragging ? 'grabbing' : 'grab',
     userSelect: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: field.type === 'checkbox' ? 'center' : 'flex-start',
     ...style
   };
 
   return (
-    <View
+    <div
       ref={fieldRef}
       style={fieldStyle}
-      onMouseDown={handleDragStart}
-      onTouchStart={handleDragStart}
+      onMouseDown={isEditing ? undefined : handleDragStart}
+      onTouchStart={isEditing ? undefined : handleDragStart}
+      onClick={handleFieldPress}
     >
-      <TouchableOpacity
-        style={{ flex: 1, padding: 2 }}
-        onPress={handleFieldPress}
-        activeOpacity={0.8}
-      >
-        {renderFieldContent()}
-      </TouchableOpacity>
+      {renderFieldContent()}
       
       {/* Resize handle - only show when selected and not editing */}
       {isSelected && !isEditing && (
-        <View
+        <div
           style={{
             position: 'absolute',
             bottom: -4,
@@ -295,8 +382,7 @@ export const EditableField = React.memo(({
             backgroundColor: colors.primary[500],
             borderRadius: 6,
             cursor: 'se-resize',
-            borderWidth: 1,
-            borderColor: 'white'
+            border: '1px solid white'
           }}
           onMouseDown={handleResizeStart}
           onTouchStart={handleResizeStart}
@@ -305,25 +391,35 @@ export const EditableField = React.memo(({
       
       {/* Delete button - only show when selected and not editing */}
       {isSelected && !isEditing && (
-        <TouchableOpacity
+        <div
           style={{
             position: 'absolute',
             top: -8,
-            right: -8,
-            width: 20,
-            height: 20,
+            left: '100%',
+            marginLeft: 4,
+            width: 16,
+            height: 16,
             backgroundColor: colors.error[500],
-            borderRadius: 10,
+            borderRadius: 8,
+            display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            borderWidth: 1,
-            borderColor: 'white'
+            border: '1px solid white',
+            cursor: 'pointer',
+            color: 'white',
+            fontSize: 12,
+            fontWeight: 'bold',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+            zIndex: 10
           }}
-          onPress={() => onDelete?.(field.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete?.(field.id);
+          }}
         >
-          <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>×</Text>
-        </TouchableOpacity>
+          ×
+        </div>
       )}
-    </View>
+    </div>
   );
 });

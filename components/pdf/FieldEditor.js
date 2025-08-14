@@ -15,7 +15,7 @@ export const FieldEditor = ({
 
   useEffect(() => {
     if (field) {
-      setValue(field.value || '');
+      setValue(field.content || '');
       setFieldType(field.type || 'text');
     }
   }, [field]);
@@ -24,7 +24,7 @@ export const FieldEditor = ({
     if (field) {
       onSave({
         ...field,
-        value,
+        content: value,
         type: fieldType
       });
     }

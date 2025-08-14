@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { MaterialIcons, Feather, FontAwesome5 } from '@expo/vector-icons';
 
 // Import our clean components and utilities
 import { PDFViewer, FieldEditor, SignaturePad } from './components/pdf';
 import { Button, Card, Modal, ToastProvider, useToast } from './components/ui';
-import { DocumentIcon, UploadIcon, EditIcon, DownloadIcon, PlusIcon } from './icons';
 import { pickPDFFile, readFileAsBase64 } from './utils/fileHelpers';
 import { usePDFEditor } from './utils/pdfEditor';
 import { exportPDFWithFields, downloadPDF, validateFieldsForExport } from './utils/pdfExport';
@@ -15,11 +15,12 @@ import { colors, components, layout } from './styles';
 function QuickFillApp() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [pdfBase64, setPdfBase64] = useState(null);
-  const [selectedFieldId, setSelectedFieldId] = useState(null);
   const [editingFieldId, setEditingFieldId] = useState(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [showFieldEditor, setShowFieldEditor] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(false);
+  const [zoomToolbarVisible, setZoomToolbarVisible] = useState(false);
+  const [showNewConfirmModal, setShowNewConfirmModal] = useState(false);
 
   // Use toast notifications
   const { showToast } = useToast();
@@ -34,33 +35,32 @@ function QuickFillApp() {
     setObjects,
     updateObject,
     deleteObject,
-    clearAllObjects
+    clearAllObjects,
+    scale,
+    setScale,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    selectedId,
+    setSelectedId
   } = usePDFEditor(pdfBase64);
 
   const handleFileSelect = async () => {
-    console.log('Starting file selection...');
     try {
       const result = await pickPDFFile();
-      console.log('File picker result:', result);
       
       if (result.success) {
-        console.log('File selected successfully:', result.name);
         setSelectedFile(result);
         
         // Convert file to base64 for PDF processing
         const base64 = await readFileAsBase64(result);
         setPdfBase64(base64);
         
-        showToast(`PDF loaded: ${result.name}`, 'success');
-      } else if (result.canceled) {
-        console.log('File selection canceled');
-      } else {
-        console.log('File selection failed:', result.error);
-        showToast('Failed to select file: ' + (result.error || 'Unknown error'), 'error');
+      } else if (!result.canceled) {
+        console.error('Failed to select file:', result.error || 'Unknown error');
       }
     } catch (error) {
       console.error('Error in handleFileSelect:', error);
-      showToast('Error selecting file: ' + error.message, 'error');
     }
   };
 
@@ -86,15 +86,14 @@ function QuickFillApp() {
       x,
       y,
       width: 150,
-      height: 75,
+      height: 50,
       content: signatureDataUrl,
       page: 1
     };
     
     setObjects(prev => [...prev, signatureField]);
-    setSelectedFieldId(id);
+    setSelectedId(id);
     setShowSignatureModal(false);
-    showToast('Signature added successfully', 'success');
   };
 
   const handleFieldUpdate = (fieldId, updates) => {
@@ -103,25 +102,20 @@ function QuickFillApp() {
 
   const handleFieldEdit = (fieldId) => {
     setEditingFieldId(fieldId);
-    if (fieldId && objects.find(f => f.id === fieldId)?.type !== 'signature') {
-      setShowFieldEditor(true);
-    }
   };
 
   const handleExportPDF = async () => {
     if (!pdfBase64 || !objects.length) {
-      showToast('No PDF loaded or no fields to export', 'warning');
       return;
     }
 
     try {
       setIsExporting(true);
-      showToast('Exporting PDF...', 'info');
       
       // Validate fields
       const validation = validateFieldsForExport(objects);
       if (!validation.valid) {
-        showToast('Validation errors: ' + validation.errors.join(', '), 'error');
+        console.error('Validation errors:', validation.errors.join(', '));
         return;
       }
 
@@ -132,22 +126,65 @@ function QuickFillApp() {
         downloadPDF(result.pdfBytes, `filled_${selectedFile.name}`);
         showToast('PDF exported successfully!', 'success');
       } else {
-        showToast('Export failed: ' + result.error, 'error');
+        console.error('Export failed:', result.error);
       }
     } catch (error) {
       console.error('Export error:', error);
-      showToast('Export failed: ' + error.message, 'error');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleNewFileWithConfirmation = () => {
+    if (objects.length > 0) {
+      setShowNewConfirmModal(true);
+    } else {
+      handleNewFile();
     }
   };
 
   const handleNewFile = () => {
     setSelectedFile(null);
     setPdfBase64(null);
-    setSelectedFieldId(null);
+    setSelectedId(null);
     setEditingFieldId(null);
     clearAllObjects();
+    setShowNewConfirmModal(false);
+  };
+
+  const handleCancel = () => {
+    if (objects.length > 0) {
+      clearAllObjects();
+    }
+  };
+
+  const toggleHeader = () => {
+    setHeaderVisible(!headerVisible);
+  };
+
+  const toggleZoomToolbar = () => {
+    setZoomToolbarVisible(!zoomToolbarVisible);
+  };
+
+  const handleZoomIn = () => {
+    setScale(prev => Math.min(3.0, prev + 0.2));
+  };
+
+  const handleZoomOut = () => {
+    setScale(prev => Math.max(0.5, prev - 0.2));
+  };
+
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
 
   return (
@@ -159,7 +196,7 @@ function QuickFillApp() {
         <View style={layout.centeredContainer}>
           <Card title="QuickFill PDF" style={[components.card, layout.center]}>
             <View style={{ marginBottom: 20, alignItems: 'center' }}>
-              <DocumentIcon size={60} color={colors.primary[500]} />
+              <MaterialIcons name="picture-as-pdf" size={60} color={colors.primary[500]} />
             </View>
             <Text style={[components.heading2, { textAlign: 'center', marginBottom: 16 }]}>
               QuickFill PDF
@@ -170,59 +207,218 @@ function QuickFillApp() {
             <Button 
               title="Choose PDF File" 
               onPress={handleFileSelect}
-              icon={<UploadIcon size={20} color={colors.white} />}
+              icon={<MaterialIcons name="upload-file" size={20} color={colors.white} />}
             />
           </Card>
         </View>
       ) : (
         // PDF editor screen
         <View style={layout.container}>
-          {/* Top Toolbar */}
-          <View style={[
-            layout.row, 
-            layout.spaceBetween, 
-            layout.center,
-            { 
-              paddingHorizontal: 16, 
-              paddingVertical: 12,
-              backgroundColor: colors.white,
-              borderBottomWidth: 1, 
-              borderBottomColor: colors.gray[200],
-              shadowColor: colors.black,
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 3,
-              elevation: 2
-            }
-          ]}>
-            {/* Left side - File info */}
-            <View style={[layout.row, layout.center, { flex: 1 }]}>
-              <DocumentIcon size={20} color={colors.gray[600]} />
-              <Text style={[components.bodyText, { marginLeft: 8, flex: 1 }]} numberOfLines={1}>
-                {selectedFile.name}
-              </Text>
+          {/* Top Toolbar - Only show if headerVisible is true */}
+          {headerVisible && (
+            <View style={[
+              layout.row, 
+              layout.center,
+              { 
+                paddingHorizontal: 16, 
+                paddingVertical: 12,
+                backgroundColor: colors.white,
+                borderBottomWidth: 1, 
+                borderBottomColor: colors.gray[200],
+                shadowColor: colors.black,
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.05,
+                shadowRadius: 3,
+                elevation: 2,
+                justifyContent: 'center'
+              }
+            ]}>
+              {/* Centered buttons - New, Export, Hide */}
+              <View style={[layout.row, { gap: 16 }]}>
+                <Button 
+                  title="New"
+                  variant="secondary"
+                  onPress={handleNewFileWithConfirmation}
+                  icon={<MaterialIcons name="add" size={16} color={colors.primary[500]} />}
+                  style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                />
+                <Button 
+                  title={isExporting ? "Exporting..." : "Export"}
+                  onPress={handleExportPDF}
+                  variant="success"
+                  disabled={isExporting || !objects.length}
+                  icon={<MaterialIcons name="file-download" size={16} color={colors.white} />}
+                  style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                />
+                <Button 
+                  title="Hide"
+                  variant="secondary"
+                  onPress={toggleHeader}
+                  icon={<MaterialIcons name="visibility-off" size={16} color={colors.primary[500]} />}
+                  style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                />
+              </View>
             </View>
-            
-            {/* Right side - New file button */}
-            <Button 
-              title="New"
-              variant="secondary"
-              onPress={handleNewFile}
-              style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-            />
-          </View>
+          )}
+
+          {/* Hide/Show Header Button - Top Right when header is hidden */}
+          {!headerVisible && (
+            <View style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 1000,
+            }}>
+              <Button 
+                onPress={toggleHeader}
+                icon={<MaterialIcons name="save" size={16} color={colors.white} />}
+                style={{ 
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: colors.primary[500],
+                  shadowColor: colors.black,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 4,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingHorizontal: 0,
+                  paddingVertical: 0
+                }}
+                title=""
+              />
+            </View>
+          )}
 
           {/* Centered PDF Viewer */}
-          <View style={{ flex: 1, backgroundColor: colors.gray[50] }}>
+          <View style={{ flex: 1, backgroundColor: colors.gray[50], position: 'relative' }}>
             <PDFViewer 
               pdfFile={selectedFile}
-              selectedFieldId={selectedFieldId}
+              pdfBase64={pdfBase64}
+              selectedFieldId={selectedId}
               editingFieldId={editingFieldId}
+              objects={objects}
               onFieldUpdate={handleFieldUpdate}
-              onFieldSelect={setSelectedFieldId}
+              onFieldSelect={setSelectedId}
               onFieldEdit={handleFieldEdit}
               onFieldDelete={deleteObject}
+              scale={scale}
+              setScale={setScale}
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              totalPages={totalPages}
             />
+            
+            {/* Zoom Toolbar Toggle Button - Top Left (only show when toolbar is hidden) */}
+            {!zoomToolbarVisible && (
+              <View style={{
+                position: 'absolute',
+                top: 16,
+                left: 16,
+                zIndex: 1000,
+              }}>
+                <Button 
+                  onPress={toggleZoomToolbar}
+                  icon={<MaterialIcons name="article" size={16} color={colors.white} />}
+                  style={{ 
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: colors.success[500],
+                    shadowColor: colors.black,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4,
+                    elevation: 4,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingHorizontal: 0,
+                    paddingVertical: 0
+                  }}
+                  title=""
+                />
+              </View>
+            )}
+
+            {/* Zoom/Navigation Toolbar - Centered Top */}
+            {zoomToolbarVisible && (
+              <View style={[
+                {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  zIndex: 999,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  backgroundColor: colors.white,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.gray[200],
+                  shadowColor: colors.black,
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 3,
+                  elevation: 2,
+                  justifyContent: 'center'
+                },
+                layout.row,
+                layout.center
+              ]}>
+                {/* Centered zoom/navigation buttons */}
+                <View style={[layout.row, { gap: 16 }]}>
+                  {/* Zoom Out */}
+                  <Button 
+                    onPress={handleZoomOut}
+                    icon={<MaterialIcons name="zoom-out" size={16} color={colors.primary[500]} />}
+                    variant="secondary"
+                    title=""
+                    style={{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }}
+                    disabled={scale <= 0.5}
+                  />
+                  
+                  {/* Zoom In */}
+                  <Button 
+                    onPress={handleZoomIn}
+                    icon={<MaterialIcons name="zoom-in" size={16} color={colors.primary[500]} />}
+                    variant="secondary"
+                    title=""
+                    style={{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }}
+                    disabled={scale >= 3.0}
+                  />
+                  
+                  {/* Previous Page */}
+                  <Button 
+                    onPress={handlePreviousPage}
+                    icon={<MaterialIcons name="navigate-before" size={16} color={colors.primary[500]} />}
+                    variant="secondary"
+                    title="Previous"
+                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                    disabled={currentPage <= 1}
+                  />
+                  
+                  {/* Next Page */}
+                  <Button 
+                    onPress={handleNextPage}
+                    icon={<MaterialIcons name="navigate-next" size={16} color={colors.primary[500]} />}
+                    variant="secondary"
+                    title="Next"
+                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                    disabled={currentPage >= totalPages}
+                  />
+                  
+                  {/* Hide Zoom Toolbar */}
+                  <Button 
+                    title="Hide"
+                    variant="secondary"
+                    onPress={toggleZoomToolbar}
+                    icon={<MaterialIcons name="visibility-off" size={16} color={colors.primary[500]} />}
+                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                  />
+                </View>
+              </View>
+            )}
           </View>
           
           {/* Bottom Toolbar */}
@@ -242,42 +438,43 @@ function QuickFillApp() {
               elevation: 2
             }
           ]}>
+            {/* Text Field Button */}
             <Button 
               onPress={() => handleFieldAdd('text')} 
-              icon={<EditIcon size={16} color={colors.white} />}
-              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }, layout.mx1]}
-              title="T"
+              icon={<Feather name="edit-3" size={16} color={colors.white} />}
+              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
+              title="Text"
             />
+            
+            {/* Date Field Button */}
             <Button 
               onPress={() => handleFieldAdd('date')} 
               variant="secondary"
-              icon={<EditIcon size={16} color={colors.primary[500]} />}
-              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }, layout.mx1]}
-              title="D"
+              icon={<MaterialIcons name="date-range" size={16} color={colors.primary[500]} />}
+              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
+              title="Date"
             />
+            
+            {/* Checkbox Button */}
             <Button 
               onPress={() => handleFieldAdd('checkbox')} 
               variant="secondary"
-              icon={<PlusIcon size={16} color={colors.primary[500]} />}
-              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }, layout.mx1]}
-              title="☑"
+              icon={<MaterialIcons name="check-box-outline-blank" size={16} color={colors.primary[500]} />}
+              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
+              title="Check"
             />
+            
+            {/* Signature Button */}
             <Button 
               onPress={() => handleFieldAdd('signature')} 
               variant="secondary"
-              icon={<EditIcon size={16} color={colors.primary[500]} />}
-              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }, layout.mx1]}
-              title="✎"
+              icon={<FontAwesome5 name="signature" size={14} color={colors.primary[500]} />}
+              style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
+              title="Sign"
             />
-            <Button 
-              title={isExporting ? "..." : "Export"}
-              onPress={handleExportPDF}
-              variant="success"
-              disabled={isExporting || !objects.length}
-              icon={<DownloadIcon size={16} color={colors.white} />}
-              style={[{ paddingHorizontal: 12 }, layout.mx1]}
-            />
+            
           </View>
+          
           
           {/* Signature Modal */}
           <Modal visible={showSignatureModal} onClose={() => setShowSignatureModal(false)}>
@@ -287,20 +484,31 @@ function QuickFillApp() {
             />
           </Modal>
 
-          {/* Field Editor Modal */}
-          <Modal visible={showFieldEditor} onClose={() => setShowFieldEditor(false)}>
-            <FieldEditor
-              field={objects.find(f => f.id === editingFieldId)}
-              onSave={(updatedField) => {
-                handleFieldUpdate(updatedField.id, updatedField);
-                setShowFieldEditor(false);
-                setEditingFieldId(null);
-              }}
-              onClose={() => {
-                setShowFieldEditor(false);
-                setEditingFieldId(null);
-              }}
-            />
+
+          {/* New File Confirmation Modal */}
+          <Modal visible={showNewConfirmModal} onClose={() => setShowNewConfirmModal(false)}>
+            <View style={{ padding: 24, minWidth: 300 }}>
+              <Text style={[components.heading3, { marginBottom: 16, textAlign: 'center' }]}>
+                Start New Document?
+              </Text>
+              <Text style={[components.bodyText, { marginBottom: 24, textAlign: 'center', color: colors.gray[600] }]}>
+                Changes will not be saved. Are you sure you want to continue?
+              </Text>
+              <View style={[layout.row, { gap: 12, justifyContent: 'center' }]}>
+                <Button 
+                  title="Cancel"
+                  variant="secondary"
+                  onPress={() => setShowNewConfirmModal(false)}
+                  style={{ paddingHorizontal: 20, paddingVertical: 10 }}
+                />
+                <Button 
+                  title="Continue"
+                  variant="error"
+                  onPress={handleNewFile}
+                  style={{ paddingHorizontal: 20, paddingVertical: 10 }}
+                />
+              </View>
+            </View>
           </Modal>
         </View>
       )}
