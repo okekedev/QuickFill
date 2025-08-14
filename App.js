@@ -1000,6 +1000,23 @@ function AppContent() {
     setObjects
   } = usePDFEditor(pdfBase64);
 
+  // Reset all state when going back to picker
+  const resetToPickerState = useCallback(() => {
+    setSelectedFile(null);
+    setPdfBase64(null);
+    setIsLoading(false);
+    setShowSignatureModal(false);
+    setSigningFieldId(null);
+    setShowTools(true);
+    setShowControls(false);
+    setCurrentPage(1);
+    setScale(1);
+    clearAllObjects();
+    setSelectedId(null);
+    setEditingId(null);
+    setCurrentView('picker');
+  }, [clearAllObjects, setCurrentPage, setScale, setSelectedId, setEditingId]);
+
   // Delete selected object function
   const handleDeleteSelected = useCallback(() => {
     if (selectedId) {
@@ -1293,7 +1310,7 @@ function AppContent() {
             }}>
               <img 
                 src="/logo.png" 
-                alt="QuickSign Logo" 
+                alt="Quick Fill Logo" 
                 style={{ 
                   width: '120px', 
                   height: 'auto',
@@ -1397,7 +1414,7 @@ function AppContent() {
           <HStack className="items-center justify-between">
             <HStack space="md" className="items-center">
               <Pressable
-                onPress={() => setCurrentView('picker')}
+                onPress={resetToPickerState}
                 className="flex-row items-center space-x-2 px-3 py-2 rounded-lg hover:bg-background-50"
               >
                 <HeroIcon path={icons.chevronLeft} className="w-4 h-4 text-typography-600" />
