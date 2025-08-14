@@ -295,36 +295,38 @@ function usePDFEditor(pdfBase64) {
     };
   }, [pdfDocument, currentPage, scale, pdfLoaded]);
 
-  const getViewportCenter = useCallback(() => {
-    if (!canvasRef.current) return { x: 100, y: 100 };
+  const getDefaultFieldPosition = useCallback(() => {
+    if (!canvasRef.current) return { x: 50, y: 50 };
     
-    const canvas = canvasRef.current;
-    const canvasRect = canvas.getBoundingClientRect();
-    
+    // Position new fields in the top-left area with some padding
     return {
-      x: canvasRect.width / 2,
-      y: canvasRect.height / 2
+      x: 50,
+      y: 50
     };
   }, []);
 
   // Consolidate field creation functions
   const createField = useCallback((type, x, y) => {
-    const center = x && y ? { x, y } : getViewportCenter();
+    // Special handling for signatures - don't create empty fields
+    if (type === 'signature') {
+      return 'open_signature_modal';
+    }
+    
+    const position = x && y ? { x, y } : getDefaultFieldPosition();
     const id = `${type}_${Date.now()}`;
     
     const fieldConfigs = {
       text: { width: 200, height: 60, content: '', fontSize: 11 },
       date: { width: 100, height: 24, content: new Date().toLocaleDateString(), fontSize: 11 },
-      checkbox: { width: 20, height: 20, content: true, fontSize: 16 },
-      signature: { width: 200, height: 80, content: '', fontSize: 12 }
+      checkbox: { width: 20, height: 20, content: true, fontSize: 16 }
     };
     
     const config = fieldConfigs[type];
     const newField = {
       id,
       type,
-      x: center.x / scale,
-      y: center.y / scale,
+      x: position.x / scale,
+      y: position.y / scale,
       width: config.width / scale,
       height: config.height / scale,
       content: config.content,
@@ -336,13 +338,16 @@ function usePDFEditor(pdfBase64) {
     setObjects(prev => [...prev, newField]);
     setSelectedId(id);
     
-    return type === 'signature' ? 'open_signature_modal' : null;
-  }, [scale, currentPage, getViewportCenter]);
+    return null;
+  }, [scale, currentPage, getDefaultFieldPosition]);
 
   const addTextObject = useCallback((x, y) => createField('text', x, y), [createField]);
   const addDateObject = useCallback((x, y) => createField('date', x, y), [createField]);
   const addCheckboxObject = useCallback((x, y) => createField('checkbox', x, y), [createField]);
-  const addSignatureObject = useCallback(() => createField('signature'), [createField]);
+  const addSignatureObject = useCallback(() => {
+    // Don't create the field yet, just return the signal to open modal
+    return 'open_signature_modal';
+  }, []);
 
   const updateObject = useCallback((id, updates) => {
     setObjects(prev => prev.map(obj => 
@@ -385,7 +390,7 @@ function usePDFEditor(pdfBase64) {
     deleteObject,
     clearAllObjects,
     isRendering,
-    getViewportCenter,
+    getDefaultFieldPosition,
     setObjects
   };
 }
@@ -582,25 +587,27 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
     transform: 'scale(1)',
     fontFamily: 'Inter, system-ui, sans-serif',
     fontWeight: '500',
-    willChange: isDragging || isResizing ? 'transform' : 'auto'
+    willChange: isDragging || isResizing ? 'transform' : 'auto',
+    touchAction: 'none'
   }), [object, scale, selected, isDragging, editing, isResizing]);
 
   // Simplified render functions
   const renderCheckbox = (object, scale, editing) => (
     <div style={{ 
-      fontSize: `${14 * scale}px`, 
-      userSelect: 'none', 
-      pointerEvents: editing ? 'none' : 'auto',
+      fontSize: object.fontSize ? `${object.fontSize * scale}px` : `${12 * scale}px`, 
+      userSelect: 'none',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       width: '100%',
       height: '100%',
-      fontWeight: 'bold',
+      fontWeight: '500',
       color: '#000000',
-      backgroundColor: 'transparent'
+      backgroundColor: 'transparent',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      lineHeight: '1'
     }}>
-      {object.content ? '✓' : ''}
+      {object.content ? 'x' : ''}
     </div>
   );
 
@@ -610,7 +617,7 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
         <img
           src={object.content}
           alt="Signature"
-          style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
         />
       );
     }
@@ -749,10 +756,11 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
       
       // Use requestAnimationFrame for smooth updates
       requestAnimationFrame(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        // Find the PDF container element
+        const pdfContainer = document.querySelector('.pdf-canvas-container');
+        if (!pdfContainer) return;
         
-        const canvasRect = canvas.getBoundingClientRect();
+        const canvasRect = pdfContainer.getBoundingClientRect();
         const maxX = (canvasRect.width / scale) - object.width;
         const maxY = (canvasRect.height / scale) - object.height;
         
@@ -768,10 +776,11 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
       e.preventDefault();
       
       requestAnimationFrame(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
+        // Find the PDF container element
+        const pdfContainer = document.querySelector('.pdf-canvas-container');
+        if (!pdfContainer) return;
         
-        const canvasRect = canvas.getBoundingClientRect();
+        const canvasRect = pdfContainer.getBoundingClientRect();
         const maxWidth = (canvasRect.width / scale) - object.x;
         const maxHeight = (canvasRect.height / scale) - object.y;
         
@@ -851,7 +860,7 @@ const EditableField = React.memo(({ object, scale, selected, editing, onUpdate, 
     
     return (
       <div style={{ 
-        width: '100%', height: '100%', overflow: 'hidden', pointerEvents: 'none',
+        width: '100%', height: '100%', overflow: 'hidden',
         display: 'flex', alignItems: 'center',
         justifyContent: object.type === 'checkbox' ? 'center' : 'flex-start',
         fontWeight: 'inherit'
@@ -987,7 +996,7 @@ function AppContent() {
     deleteObject,
     clearAllObjects,
     isRendering,
-    getViewportCenter,
+    getDefaultFieldPosition,
     setObjects
   } = usePDFEditor(pdfBase64);
 
@@ -1054,7 +1063,7 @@ function AppContent() {
 
   const handleSaveSignature = useCallback((signatureDataURL) => {
     if (signingFieldId === 'new') {
-      const center = getViewportCenter();
+      const center = getDefaultFieldPosition();
       const id = `signature_${Date.now()}`;
       const newSignature = {
         id,
@@ -1075,7 +1084,7 @@ function AppContent() {
     
     setShowSignatureModal(false);
     setSigningFieldId(null);
-  }, [signingFieldId, updateObject, getViewportCenter, scale, currentPage, setObjects, setSelectedId]);
+  }, [signingFieldId, updateObject, getDefaultFieldPosition, scale, currentPage, setObjects, setSelectedId]);
 
   // Save function - Export as PDF
   const handleSavePDF = useCallback(async () => {
@@ -1278,7 +1287,10 @@ function AppContent() {
           <VStack space="2xl" className="items-center max-w-md w-full">
             
             {/* Logo */}
-            <Box className="mb-4">
+            <Box className="mb-4" style={{
+              animation: 'fadeIn 0.5s ease-out forwards',
+              opacity: 0
+            }}>
               <img 
                 src="/logo.png" 
                 alt="QuickSign Logo" 
@@ -1299,7 +1311,16 @@ function AppContent() {
                 disabled={isLoading}
                 className="items-center"
               >
-                <Box className="upload-zone-windows p-16 w-full items-center">
+                <Box className="upload-zone-windows items-center" style={{
+                  width: '200px',
+                  height: '200px',
+                  padding: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  animation: 'fadeIn 0.6s ease-out forwards',
+                  opacity: 0
+                }}>
                   <VStack space="sm" className="items-center">
                     {isLoading ? (
                       <Spinner size="large" color="#0064EA" />
@@ -1307,14 +1328,14 @@ function AppContent() {
                       <Box className="animate-pulse">
                         <HeroIcon 
                           path={icons.upload} 
-                          className="w-20 h-20 text-primary-500"
+                          className="w-28 h-28 text-primary-500"
                           style={{
                             animation: 'windowsPulse 2s ease-in-out infinite'
                           }}
                         />
                       </Box>
                     )}
-                    <Text className="text-typography-600 font-medium text-lg mt-2">
+                    <Text className="text-typography-600 font-semibold text-xl mt-2">
                       {isLoading ? 'Processing...' : 'PDF'}
                     </Text>
                   </VStack>
@@ -1322,22 +1343,34 @@ function AppContent() {
               </Pressable>
 
               {/* Key Features */}
-              <VStack space="md" className="items-center w-full mt-6">
-                <HStack space="sm" className="items-center">
+              <VStack space="xl" className="items-center w-full mt-8">
+                <HStack space="sm" className="items-center" style={{
+                  animation: 'fadeInUp 0.8s ease-out forwards',
+                  animationDelay: '0.3s',
+                  opacity: 0
+                }}>
                   <Box className="w-6 h-6 rounded-full bg-secondary-500 flex items-center justify-center">
                     <HeroIcon path={icons.pencil} className="w-4 h-4 text-white" />
                   </Box>
                   <Text className="text-typography-700 font-medium">Sign, Text, Date & Check Fields</Text>
                 </HStack>
                 
-                <HStack space="sm" className="items-center">
+                <HStack space="sm" className="items-center" style={{
+                  animation: 'fadeInUp 0.8s ease-out forwards',
+                  animationDelay: '0.5s',
+                  opacity: 0
+                }}>
                   <Box className="w-6 h-6 rounded-full bg-tertiary-500 flex items-center justify-center">
                     <HeroIcon path={icons.check} className="w-4 h-4 text-white" />
                   </Box>
                   <Text className="text-typography-700 font-medium">Offline Mode - No Cloud Required</Text>
                 </HStack>
                 
-                <HStack space="sm" className="items-center">
+                <HStack space="sm" className="items-center" style={{
+                  animation: 'fadeInUp 0.8s ease-out forwards',
+                  animationDelay: '0.7s',
+                  opacity: 0
+                }}>
                   <Box className="w-6 h-6 rounded-full bg-warning-500 flex items-center justify-center">
                     <HeroIcon path={icons.check} className="w-4 h-4 text-white" />
                   </Box>
@@ -1478,7 +1511,7 @@ function AppContent() {
                   </VStack>
                 </Box>
               ) : (
-                <Box className="relative bg-white">
+                <Box className="relative bg-white pdf-canvas-container">
                   <canvas
                     ref={canvasRef}
                     onClick={(e) => {
