@@ -91,33 +91,14 @@ export const exportPDFWithFields = async (originalPdfBase64, fields) => {
             break;
             
           case 'checkbox':
-            // Draw checkbox border
-            page.drawRectangle({
-              x: x,
-              y: y,
-              width: field.width,
-              height: field.height,
-              borderColor: rgb(0, 0, 0),
-              borderWidth: 1
-            });
-            
-            // Draw checkmark if checked
+            // Only draw black X if checked - no border or background
             if (field.content === true) {
-              page.drawRectangle({
-                x: x + 2,
-                y: y + 2,
-                width: field.width - 4,
-                height: field.height - 4,
-                color: rgb(0, 0, 0)
-              });
-              
-              // Draw checkmark
               page.drawText('X', {
                 x: x + field.width / 2 - 4,
                 y: y + field.height / 2 - 6,
                 size: Math.min(field.width * 0.8, 16),
                 font: helveticaBoldFont,
-                color: rgb(1, 1, 1)
+                color: rgb(0, 0, 0)
               });
             }
             break;

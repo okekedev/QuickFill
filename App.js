@@ -222,7 +222,7 @@ function QuickFillApp() {
                   style={{ paddingHorizontal: 12, paddingVertical: 8 }}
                 />
                 <Button 
-                  title={isExporting ? "Exporting..." : "Export"}
+                  title={isExporting ? "Saving..." : "Save"}
                   onPress={handleExportPDF}
                   variant="success"
                   disabled={isExporting || !objects.length}
