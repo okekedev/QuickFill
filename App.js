@@ -88,7 +88,7 @@ function QuickFillApp() {
       width: 150,
       height: 50,
       content: signatureDataUrl,
-      page: 1
+      page: currentPage
     };
     
     setObjects(prev => [...prev, signatureField]);
@@ -191,29 +191,8 @@ function QuickFillApp() {
     <View style={layout.container}>
       <StatusBar style="auto" />
       
-      {!selectedFile ? (
-        // File picker screen
-        <View style={layout.centeredContainer}>
-          <Card title="QuickFill PDF" style={[components.card, layout.center]}>
-            <View style={{ marginBottom: 20, alignItems: 'center' }}>
-              <MaterialIcons name="picture-as-pdf" size={60} color={colors.primary[500]} />
-            </View>
-            <Text style={[components.heading2, { textAlign: 'center', marginBottom: 16 }]}>
-              QuickFill PDF
-            </Text>
-            <Text style={[components.bodyText, { textAlign: 'center', marginBottom: 24 }]}>
-              Upload a PDF document to start adding fillable fields and signatures
-            </Text>
-            <Button 
-              title="Choose PDF File" 
-              onPress={handleFileSelect}
-              icon={<MaterialIcons name="upload-file" size={20} color={colors.white} />}
-            />
-          </Card>
-        </View>
-      ) : (
-        // PDF editor screen
-        <View style={layout.container}>
+      {/* Always show PDF editor screen */}
+      <View style={layout.container}>
           {/* Top Toolbar - Only show if headerVisible is true */}
           {headerVisible && (
             <View style={[
@@ -304,6 +283,7 @@ function QuickFillApp() {
               onFieldSelect={setSelectedId}
               onFieldEdit={handleFieldEdit}
               onFieldDelete={deleteObject}
+              onFileSelect={handleFileSelect}
               scale={scale}
               setScale={setScale}
               currentPage={currentPage}
@@ -511,7 +491,6 @@ function QuickFillApp() {
             </View>
           </Modal>
         </View>
-      )}
     </View>
   );
 }

@@ -1,6 +1,7 @@
 // components/pdf/PDFViewer.js
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Image } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { EditableField } from './EditableField';
 import { usePDFEditor } from '../../utils/pdfEditor';
 import { readFileAsBase64 } from '../../utils/fileHelpers';
@@ -184,9 +185,32 @@ export const PDFViewer = ({
         
         {!pdfBase64 && !loading && (
           <View style={[layout.center, { padding: 50 }]}>
-            <Text style={[components.bodyText, { textAlign: 'center', color: colors.text.secondary }]}>
-              No PDF loaded
-            </Text>
+            {props.onFileSelect ? (
+              <View style={[components.card, layout.center, { backgroundColor: colors.white, borderRadius: 12, padding: 32, maxWidth: 400 }]}>
+                <View style={{ marginBottom: 20, alignItems: 'center' }}>
+                  <Image 
+                    source={require('../../assets/icon.png')} 
+                    style={{ 
+                      width: 120, 
+                      height: 120,
+                      resizeMode: 'contain'
+                    }} 
+                  />
+                </View>
+                <Text style={[components.bodyText, { textAlign: 'center', marginBottom: 24 }]}>
+                  Upload a PDF document to start adding fillable fields and signatures
+                </Text>
+                <Button 
+                  title="Choose PDF File" 
+                  onPress={props.onFileSelect}
+                  icon={<MaterialIcons name="upload-file" size={20} color={colors.white} />}
+                />
+              </View>
+            ) : (
+              <Text style={[components.bodyText, { textAlign: 'center', color: colors.text.secondary }]}>
+                No PDF loaded
+              </Text>
+            )}
           </View>
         )}
 

@@ -28,10 +28,10 @@
   },
   "expo": {
     "name": "Quick Fill",
-    "slug": "quick-fill-sign",
+    "slug": "Quick Fill",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./public/icon.png",
+    "icon": "./icon.png",
     "userInterfaceStyle": "automatic",
     "platforms": [
       "ios",
@@ -40,7 +40,7 @@
     ],
     "web": {
       "bundler": "metro",
-      "favicon": "./public/favicon.png"
+      "favicon": "./favicon.png"
     },
     "assetBundlePatterns": [
       "**/*"
