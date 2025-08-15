@@ -4,16 +4,21 @@ import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 
 // Universal file reading for PDF processing
-export const readFileAsBase64 = (fileAsset) => {
+export const readFileAsBase64 = async (fileAsset) => {
+  console.log('readFileAsBase64 called with:', fileAsset);
+  console.log('Platform:', Platform.OS);
+  
   return new Promise((resolve, reject) => {
     if (Platform.OS === 'web') {
       if (fileAsset.uri) {
+        console.log('Web: Reading from URI');
         fetch(fileAsset.uri)
           .then(response => response.blob())
           .then(blob => {
             const reader = new FileReader();
             reader.onload = () => {
               const base64 = reader.result.split(',')[1];
+              console.log('Web: Base64 length:', base64.length);
               resolve(base64);
             };
             reader.onerror = reject;
@@ -21,9 +26,11 @@ export const readFileAsBase64 = (fileAsset) => {
           })
           .catch(reject);
       } else if (fileAsset.file) {
+        console.log('Web: Reading from file object');
         const reader = new FileReader();
         reader.onload = () => {
           const base64 = reader.result.split(',')[1];
+          console.log('Web: Base64 length:', base64.length);
           resolve(base64);
         };
         reader.onerror = reject;
@@ -32,11 +39,47 @@ export const readFileAsBase64 = (fileAsset) => {
         reject(new Error('No valid file or URI found'));
       }
     } else {
-      if (fileAsset.uri && fileAsset.uri.startsWith('data:')) {
-        const base64 = fileAsset.uri.split(',')[1];
-        resolve(base64);
+      // For iOS/Android, use FileSystem to read the file
+      console.log('Mobile: Reading file from URI:', fileAsset.uri);
+      if (fileAsset.uri) {
+        // Add timeout and error handling for mobile file reading
+        const timeoutId = setTimeout(() => {
+          reject(new Error('File reading timeout - file may be too large or corrupted'));
+        }, 30000); // 30 second timeout
+        
+        FileSystem.readAsStringAsync(fileAsset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        })
+        .then(base64 => {
+          clearTimeout(timeoutId);
+          console.log('Mobile: Base64 length:', base64?.length || 0);
+          
+          // Validate the base64 result
+          if (!base64 || base64.length === 0) {
+            reject(new Error('Empty file or failed to read content'));
+            return;
+          }
+          
+          // Basic PDF validation - check for PDF header
+          try {
+            const pdfHeader = atob(base64.substring(0, 20));
+            if (!pdfHeader.startsWith('%PDF')) {
+              console.warn('File may not be a valid PDF');
+            }
+          } catch (headerError) {
+            console.warn('Could not validate PDF header:', headerError);
+          }
+          
+          console.log('Mobile: Base64 first 100 chars:', base64.substring(0, 100));
+          resolve(base64);
+        })
+        .catch(error => {
+          clearTimeout(timeoutId);
+          console.error('FileSystem read error:', error);
+          reject(new Error(`Failed to read file: ${error.message || 'Unknown error'}`));
+        });
       } else {
-        reject(new Error('File format not supported on this platform'));
+        reject(new Error('No valid URI found for mobile platform'));
       }
     }
   });
@@ -45,19 +88,31 @@ export const readFileAsBase64 = (fileAsset) => {
 // File picking utilities
 export const pickPDFFile = async () => {
   try {
+    console.log('pickPDFFile called on platform:', Platform.OS);
+    
     const result = await DocumentPicker.getDocumentAsync({
       type: 'application/pdf',
       copyToCacheDirectory: true,
     });
     
+    console.log('DocumentPicker result:', result);
+    
     // Check if canceled (new API structure)
     if (result.canceled) {
+      console.log('File picking was canceled');
       return { success: false, canceled: true };
     }
     
     // Get the first asset from the assets array
     if (result.assets && result.assets.length > 0) {
       const file = result.assets[0];
+      console.log('Selected file:', {
+        name: file.name,
+        size: file.size,
+        uri: file.uri,
+        mimeType: file.mimeType
+      });
+      
       return {
         success: true,
         uri: file.uri,
@@ -66,6 +121,7 @@ export const pickPDFFile = async () => {
       };
     }
     
+    console.log('No file selected from assets');
     return { success: false, error: 'No file selected' };
   } catch (error) {
     console.error('Error picking PDF file:', error);

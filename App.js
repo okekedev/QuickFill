@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text } from 'react-native';
+import React, { useState, useCallback, Component, useRef } from 'react';
+import { View, Text, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, Feather, FontAwesome5 } from '@expo/vector-icons';
 
@@ -11,6 +11,74 @@ import { usePDFEditor } from './utils/pdfEditor';
 import { exportPDFWithFields, downloadPDF, validateFieldsForExport } from './utils/pdfExport';
 import { colors, components, layout } from './styles';
 
+// Error Boundary Component
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error Boundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20,
+          backgroundColor: colors.gray[50]
+        }}>
+          <MaterialIcons name="error" size={64} color={colors.error[500]} />
+          <Text style={[components.bodyText, { 
+            marginTop: 16, 
+            textAlign: 'center',
+            fontSize: 18,
+            fontWeight: '600',
+            color: colors.text.primary
+          }]}>
+            Something went wrong
+          </Text>
+          <Text style={[components.bodyText, { 
+            marginTop: 8, 
+            textAlign: 'center',
+            color: colors.text.secondary
+          }]}>
+            The app encountered an unexpected error. Please restart the app.
+          </Text>
+          <Button 
+            title="Restart App" 
+            onPress={() => this.setState({ hasError: false, error: null })}
+            style={{ marginTop: 20 }}
+          />
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Simple SafeArea component for iOS
+const SafeContainer = ({ children, style }) => {
+  if (Platform.OS === 'web') {
+    return <View style={[{ flex: 1 }, style]}>{children}</View>;
+  }
+  
+  return (
+    <View style={[{ flex: 1, paddingTop: 44 }, style]}>
+      {children}
+    </View>
+  );
+};
+
 // Main App Component with Toast Integration
 function QuickFillApp() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -21,6 +89,10 @@ function QuickFillApp() {
   const [headerVisible, setHeaderVisible] = useState(false);
   const [zoomToolbarVisible, setZoomToolbarVisible] = useState(false);
   const [showNewConfirmModal, setShowNewConfirmModal] = useState(false);
+  const [isLoadingPDF, setIsLoadingPDF] = useState(false);
+  
+  // Ref for PDFViewer to access zoom methods
+  const pdfViewerRef = useRef(null);
 
   // Use toast notifications
   const { showToast } = useToast();
@@ -45,26 +117,56 @@ function QuickFillApp() {
     setSelectedId
   } = usePDFEditor(pdfBase64);
 
-  const handleFileSelect = async () => {
+  const handleFileSelect = useCallback(async () => {
+    if (isLoadingPDF) {
+      console.log('Already loading a PDF, ignoring duplicate call');
+      return;
+    }
+
     try {
+      setIsLoadingPDF(true);
+      console.log('Starting file selection...');
+      
       const result = await pickPDFFile();
       
       if (result.success) {
+        console.log('File selected successfully:', result.name);
         setSelectedFile(result);
         
         // Convert file to base64 for PDF processing
-        const base64 = await readFileAsBase64(result);
-        setPdfBase64(base64);
+        console.log('Converting file to base64...');
+        try {
+          const base64 = await readFileAsBase64(result);
+          console.log('Base64 conversion complete, length:', base64?.length);
+          
+          // Use setTimeout to prevent race conditions on mobile
+          setTimeout(() => {
+            setPdfBase64(base64);
+            console.log('PDF Base64 state updated');
+          }, 100);
+          
+        } catch (conversionError) {
+          console.error('Base64 conversion failed:', conversionError);
+          showToast('Failed to process PDF file', 'error');
+          return;
+        }
         
       } else if (!result.canceled) {
         console.error('Failed to select file:', result.error || 'Unknown error');
+        showToast('Failed to select PDF file', 'error');
       }
     } catch (error) {
       console.error('Error in handleFileSelect:', error);
+      showToast('Error loading PDF file', 'error');
+    } finally {
+      // Delay setting loading to false to prevent UI glitches
+      setTimeout(() => {
+        setIsLoadingPDF(false);
+      }, 200);
     }
-  };
+  }, [isLoadingPDF, showToast]);
 
-  const handleFieldAdd = (type) => {
+  const handleFieldAdd = useCallback((type) => {
     const result = type === 'signature' ? addSignatureObject() : 
                    type === 'text' ? addTextObject() :
                    type === 'date' ? addDateObject() :
@@ -73,9 +175,9 @@ function QuickFillApp() {
     if (result === 'open_signature_modal') {
       setShowSignatureModal(true);
     }
-  };
+  }, [addSignatureObject, addTextObject, addDateObject, addCheckboxObject]);
 
-  const handleSignatureSave = (signatureDataUrl) => {
+  const handleSignatureSave = useCallback((signatureDataUrl) => {
     const x = 50;
     const y = 50;
     const id = `signature_${Date.now()}`;
@@ -94,18 +196,19 @@ function QuickFillApp() {
     setObjects(prev => [...prev, signatureField]);
     setSelectedId(id);
     setShowSignatureModal(false);
-  };
+  }, [currentPage, setObjects, setSelectedId]);
 
-  const handleFieldUpdate = (fieldId, updates) => {
+  const handleFieldUpdate = useCallback((fieldId, updates) => {
     updateObject(fieldId, updates);
-  };
+  }, [updateObject]);
 
-  const handleFieldEdit = (fieldId) => {
+  const handleFieldEdit = useCallback((fieldId) => {
     setEditingFieldId(fieldId);
-  };
+  }, []);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = useCallback(async () => {
     if (!pdfBase64 || !objects.length) {
+      showToast('No PDF or fields to export', 'warning');
       return;
     }
 
@@ -116,6 +219,7 @@ function QuickFillApp() {
       const validation = validateFieldsForExport(objects);
       if (!validation.valid) {
         console.error('Validation errors:', validation.errors.join(', '));
+        showToast('Please fill all required fields', 'error');
         return;
       }
 
@@ -127,68 +231,69 @@ function QuickFillApp() {
         showToast('PDF exported successfully!', 'success');
       } else {
         console.error('Export failed:', result.error);
+        showToast('Failed to export PDF', 'error');
       }
     } catch (error) {
       console.error('Export error:', error);
+      showToast('Error exporting PDF', 'error');
     } finally {
       setIsExporting(false);
     }
-  };
+  }, [pdfBase64, objects, selectedFile, showToast]);
 
-  const handleNewFileWithConfirmation = () => {
+  const handleNewFileWithConfirmation = useCallback(() => {
     if (objects.length > 0) {
       setShowNewConfirmModal(true);
     } else {
       handleNewFile();
     }
-  };
+  }, [objects.length]);
 
-  const handleNewFile = () => {
+  const handleNewFile = useCallback(() => {
+    console.log('Starting new file');
     setSelectedFile(null);
     setPdfBase64(null);
     setSelectedId(null);
     setEditingFieldId(null);
     clearAllObjects();
     setShowNewConfirmModal(false);
-  };
+    setIsLoadingPDF(false);
+  }, [clearAllObjects, setSelectedId]);
 
-  const handleCancel = () => {
-    if (objects.length > 0) {
-      clearAllObjects();
-    }
-  };
-
-  const toggleHeader = () => {
+  const toggleHeader = useCallback(() => {
     setHeaderVisible(!headerVisible);
-  };
+  }, [headerVisible]);
 
-  const toggleZoomToolbar = () => {
+  const toggleZoomToolbar = useCallback(() => {
     setZoomToolbarVisible(!zoomToolbarVisible);
-  };
+  }, [zoomToolbarVisible]);
 
-  const handleZoomIn = () => {
-    setScale(prev => Math.min(3.0, prev + 0.2));
-  };
+  const handleZoomIn = useCallback(() => {
+    if (pdfViewerRef.current) {
+      pdfViewerRef.current.zoomIn();
+    }
+  }, []);
 
-  const handleZoomOut = () => {
-    setScale(prev => Math.max(0.5, prev - 0.2));
-  };
+  const handleZoomOut = useCallback(() => {
+    if (pdfViewerRef.current) {
+      pdfViewerRef.current.zoomOut();
+    }
+  }, []);
 
-
-  const handlePreviousPage = () => {
+  const handlePreviousPage = useCallback(() => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
-  };
+  }, [currentPage, setCurrentPage]);
 
-  const handleNextPage = () => {
+  const handleNextPage = useCallback(() => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
-  };
+  }, [currentPage, totalPages, setCurrentPage]);
 
   return (
-    <View style={layout.container}>
+    <SafeContainer style={layout.container}>
       <StatusBar style="auto" />
       
       {/* Always show PDF editor screen */}
@@ -213,7 +318,7 @@ function QuickFillApp() {
               }
             ]}>
               {/* Centered buttons - New, Export, Hide */}
-              <View style={[layout.row, { gap: 16 }]}>
+              <View style={[layout.row, { gap: 12 }]}>
                 <Button 
                   title="New"
                   variant="secondary"
@@ -244,7 +349,7 @@ function QuickFillApp() {
           {!headerVisible && (
             <View style={{
               position: 'absolute',
-              top: 16,
+              top: Platform.OS === 'web' ? 16 : 60,
               right: 16,
               zIndex: 1000,
             }}>
@@ -274,7 +379,7 @@ function QuickFillApp() {
           {/* Centered PDF Viewer */}
           <View style={{ flex: 1, backgroundColor: colors.gray[50], position: 'relative' }}>
             <PDFViewer 
-              pdfFile={selectedFile}
+              ref={pdfViewerRef}
               pdfBase64={pdfBase64}
               selectedFieldId={selectedId}
               editingFieldId={editingFieldId}
@@ -295,7 +400,7 @@ function QuickFillApp() {
             {!zoomToolbarVisible && (
               <View style={{
                 position: 'absolute',
-                top: 16,
+                top: Platform.OS === 'web' ? 16 : 60,
                 left: 16,
                 zIndex: 1000,
               }}>
@@ -347,7 +452,7 @@ function QuickFillApp() {
                 layout.center
               ]}>
                 {/* Centered zoom/navigation buttons */}
-                <View style={[layout.row, { gap: 16 }]}>
+                <View style={[layout.row, { gap: 12 }]}>
                   {/* Zoom Out */}
                   <Button 
                     onPress={handleZoomOut}
@@ -355,7 +460,6 @@ function QuickFillApp() {
                     variant="secondary"
                     title=""
                     style={{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }}
-                    disabled={scale <= 0.5}
                   />
                   
                   {/* Zoom In */}
@@ -365,7 +469,6 @@ function QuickFillApp() {
                     variant="secondary"
                     title=""
                     style={{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 40 }}
-                    disabled={scale >= 3.0}
                   />
                   
                   {/* Previous Page */}
@@ -373,8 +476,8 @@ function QuickFillApp() {
                     onPress={handlePreviousPage}
                     icon={<MaterialIcons name="navigate-before" size={16} color={colors.primary[500]} />}
                     variant="secondary"
-                    title="Previous"
-                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                    title="Prev"
+                    style={{ paddingHorizontal: 8, paddingVertical: 8 }}
                     disabled={currentPage <= 1}
                   />
                   
@@ -384,7 +487,7 @@ function QuickFillApp() {
                     icon={<MaterialIcons name="navigate-next" size={16} color={colors.primary[500]} />}
                     variant="secondary"
                     title="Next"
-                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                    style={{ paddingHorizontal: 8, paddingVertical: 8 }}
                     disabled={currentPage >= totalPages}
                   />
                   
@@ -394,20 +497,21 @@ function QuickFillApp() {
                     variant="secondary"
                     onPress={toggleZoomToolbar}
                     icon={<MaterialIcons name="visibility-off" size={16} color={colors.primary[500]} />}
-                    style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+                    style={{ paddingHorizontal: 8, paddingVertical: 8 }}
                   />
                 </View>
               </View>
             )}
           </View>
           
-          {/* Bottom Toolbar */}
+          {/* Bottom Toolbar with simple safe area */}
           <View style={[
             layout.row, 
             layout.center, 
             {
               paddingHorizontal: 16,
               paddingVertical: 12,
+              paddingBottom: Platform.OS === 'ios' ? 34 : 12, // iPhone home indicator
               backgroundColor: colors.white,
               borderTopWidth: 1, 
               borderTopColor: colors.gray[200],
@@ -421,7 +525,7 @@ function QuickFillApp() {
             {/* Text Field Button */}
             <Button 
               onPress={() => handleFieldAdd('text')} 
-              icon={<Feather name="edit-3" size={16} color={colors.white} />}
+              icon={<Feather name="edit-3" size={14} color={colors.white} />}
               style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
               title="Text"
             />
@@ -430,7 +534,7 @@ function QuickFillApp() {
             <Button 
               onPress={() => handleFieldAdd('date')} 
               variant="secondary"
-              icon={<MaterialIcons name="date-range" size={16} color={colors.primary[500]} />}
+              icon={<MaterialIcons name="date-range" size={14} color={colors.primary[500]} />}
               style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
               title="Date"
             />
@@ -439,7 +543,7 @@ function QuickFillApp() {
             <Button 
               onPress={() => handleFieldAdd('checkbox')} 
               variant="secondary"
-              icon={<MaterialIcons name="check-box-outline-blank" size={16} color={colors.primary[500]} />}
+              icon={<MaterialIcons name="check-box-outline-blank" size={14} color={colors.primary[500]} />}
               style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
               title="Check"
             />
@@ -448,13 +552,11 @@ function QuickFillApp() {
             <Button 
               onPress={() => handleFieldAdd('signature')} 
               variant="secondary"
-              icon={<FontAwesome5 name="signature" size={14} color={colors.primary[500]} />}
+              icon={<FontAwesome5 name="signature" size={12} color={colors.primary[500]} />}
               style={[{ paddingHorizontal: 8, paddingVertical: 8, minWidth: 50 }, layout.mx1]}
               title="Sign"
             />
-            
           </View>
-          
           
           {/* Signature Modal */}
           <Modal visible={showSignatureModal} onClose={() => setShowSignatureModal(false)}>
@@ -463,7 +565,6 @@ function QuickFillApp() {
               onCancel={() => setShowSignatureModal(false)}
             />
           </Modal>
-
 
           {/* New File Confirmation Modal */}
           <Modal visible={showNewConfirmModal} onClose={() => setShowNewConfirmModal(false)}>
@@ -491,15 +592,17 @@ function QuickFillApp() {
             </View>
           </Modal>
         </View>
-    </View>
+    </SafeContainer>
   );
 }
 
-// Export wrapped app with ToastProvider
+// Export wrapped app with Error Boundary and ToastProvider
 export default function App() {
   return (
-    <ToastProvider>
-      <QuickFillApp />
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <QuickFillApp />
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
