@@ -112,7 +112,7 @@ export const exportPDFWithFields = async (originalPdfBase64, fields) => {
               });
               
               // Draw checkmark
-              page.drawText('✓', {
+              page.drawText('X', {
                 x: x + field.width / 2 - 4,
                 y: y + field.height / 2 - 6,
                 size: Math.min(field.width * 0.8, 16),

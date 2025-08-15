@@ -69,9 +69,9 @@ export const Button = ({
       style={[
         getButtonStyle(),
         disabled && components.buttonDisabled,
-        pointerEvents && { pointerEvents },
+        pointerEvents && typeof pointerEvents === 'string' ? { pointerEvents } : null,
         style
-      ]}
+      ].filter(Boolean)}
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}

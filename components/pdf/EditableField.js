@@ -220,6 +220,7 @@ export const EditableField = React.memo(({
           className="hide-scrollbars"
           style={{
             fontSize: Math.max(8, (field.fontSize || 11) * scale),
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             color: field.color || '#000000',
             padding: 4,
             margin: 0,
@@ -233,7 +234,8 @@ export const EditableField = React.memo(({
             whiteSpace: 'pre-wrap',
             overflow: 'hidden',
             scrollbarWidth: 'none',
-            msOverflowStyle: 'none'
+            msOverflowStyle: 'none',
+            lineHeight: 1.4
           }}
           multiline={true}
           autoFocus
@@ -247,6 +249,7 @@ export const EditableField = React.memo(({
           <div
             style={{
               fontSize: Math.max(8, (field.fontSize || 11) * scale),
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
               color: field.color || '#000000',
               padding: 4,
               width: '100%',
@@ -256,7 +259,8 @@ export const EditableField = React.memo(({
               justifyContent: 'flex-start',
               wordWrap: 'break-word',
               whiteSpace: 'pre-wrap',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              lineHeight: 1.4
             }}
           >
 {field.content || 'Text Field'}
