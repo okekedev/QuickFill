@@ -3,7 +3,9 @@
     "allow": [
       "Bash(rm:*)",
       "WebSearch",
-      "Bash(npx expo start:*)"
+      "Bash(npx expo start:*)",
+      "Bash(npm start:*)",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": [],
